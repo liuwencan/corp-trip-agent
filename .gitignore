@@ -1,0 +1,29 @@
+# 编译产物
+target/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# 日志
+*.log
+logs/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 本地配置
+application-local.yml
+application-local.properties
+
+# 环境变量
+.env
+
+# 依赖
+node_modules/

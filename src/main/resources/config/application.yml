@@ -5,7 +5,6 @@ spring:
     name: corp-trip-agent
 
 mybatis-plus:
-#  type-handlers-package: com.gogo.travel.config
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
