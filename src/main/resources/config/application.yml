@@ -38,3 +38,6 @@ logging:
   level:
     cn.lwccxy.corptrip: INFO # 需要排查问题时改为DEBUG，我们打了很多DEBUG日志用于观察agent运行情况
     io.agentscope.core: INFO
+
+
+#途牛API：  sk-e5697dac927943aa99527500d6bb90ea
