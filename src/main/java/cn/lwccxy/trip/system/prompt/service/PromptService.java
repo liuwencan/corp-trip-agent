@@ -143,22 +143,16 @@ public class PromptService extends ServiceImpl<PromptMapper, PromptEntity> {
         vo.setLeftVersionNo(left.getVersionNo());
         vo.setRightVersionId(right.getId());
         vo.setRightVersionNo(right.getVersionNo());
-        vo.setSystemPromptChanged(!same(left.getSystemPrompt(), right.getSystemPrompt()));
-        vo.setUserTemplateChanged(!same(left.getUserTemplate(), right.getUserTemplate()));
-        vo.setOutputSchemaChanged(!same(left.getOutputSchema(), right.getOutputSchema()));
-        vo.setLeftSystemPrompt(left.getSystemPrompt());
-        vo.setRightSystemPrompt(right.getSystemPrompt());
-        vo.setLeftUserTemplate(left.getUserTemplate());
-        vo.setRightUserTemplate(right.getUserTemplate());
-        vo.setLeftOutputSchema(left.getOutputSchema());
-        vo.setRightOutputSchema(right.getOutputSchema());
+        vo.setContentChanged(!same(left.getPromptContent(), right.getPromptContent()));
+        vo.setLeftPromptContent(left.getPromptContent());
+        vo.setRightPromptContent(right.getPromptContent());
         return Response.success(vo);
     }
 
     @Transactional
     public Response<PromptVersionVO> addVersion(Long promptId, PromptVersionSaveForm form) {
         if (form == null || form.getVersionNo() == null || form.getVersionNo() < 1
-                || form.getSystemPrompt() == null || form.getSystemPrompt().isBlank()
+                || form.getPromptContent() == null || form.getPromptContent().isBlank()
                 || form.getChangeReason() == null || form.getChangeReason().isBlank()) {
             return fail(form == null || form.getChangeReason() == null || form.getChangeReason().isBlank()
                     ? PromptErrorCode.PROMPT_OPERATION_REASON_REQUIRED
@@ -179,10 +173,9 @@ public class PromptService extends ServiceImpl<PromptMapper, PromptEntity> {
         PromptVersionEntity version = new PromptVersionEntity();
         version.setPromptId(promptId);
         version.setVersionNo(form.getVersionNo());
-        version.setSystemPrompt(form.getSystemPrompt());
-        version.setUserTemplate(form.getUserTemplate());
-        version.setOutputSchema(form.getOutputSchema());
-        version.setContentHash(contentHash(form));
+        String promptContent = form.getPromptContent().trim();
+        version.setPromptContent(promptContent);
+        version.setContentHash(contentHash(promptContent));
         version.setVersionStatus(PromptVersionStatus.DRAFT.name());
         version.setChangeReason(form.getChangeReason().trim());
         version.setCreatedBy(operator);
@@ -365,9 +358,7 @@ public class PromptService extends ServiceImpl<PromptMapper, PromptEntity> {
         return operator == null || operator.isBlank() ? null : operator.trim();
     }
 
-    private String contentHash(PromptVersionSaveForm form) {
-        String content = String.join("\n", nullToEmpty(form.getSystemPrompt()),
-                nullToEmpty(form.getUserTemplate()), nullToEmpty(form.getOutputSchema()));
+    private String contentHash(String content) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(content.getBytes(StandardCharsets.UTF_8)));
@@ -397,9 +388,7 @@ public class PromptService extends ServiceImpl<PromptMapper, PromptEntity> {
         vo.setId(entity.getId());
         vo.setPromptId(entity.getPromptId());
         vo.setVersionNo(entity.getVersionNo());
-        vo.setSystemPrompt(entity.getSystemPrompt());
-        vo.setUserTemplate(entity.getUserTemplate());
-        vo.setOutputSchema(entity.getOutputSchema());
+        vo.setPromptContent(entity.getPromptContent());
         vo.setContentHash(entity.getContentHash());
         vo.setVersionStatus(entity.getVersionStatus());
         vo.setChangeReason(entity.getChangeReason());

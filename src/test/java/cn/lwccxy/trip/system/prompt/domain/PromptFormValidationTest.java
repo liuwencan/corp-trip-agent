@@ -29,7 +29,7 @@ class PromptFormValidationTest {
     void promptVersionRequiresPositiveNumberAndReason() {
         PromptVersionSaveForm form = new PromptVersionSaveForm();
         form.setVersionNo(0);
-        form.setSystemPrompt("system");
+        form.setPromptContent("system");
 
         assertThat(validator.validate(form)).hasSize(2);
     }

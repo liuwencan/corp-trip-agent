@@ -22,11 +22,11 @@
 
 ### Requirement: Prompt versions are immutable and strictly increasing
 
-系统 SHALL 为每次 Prompt 内容变更创建独立版本，并保存完整内容、版本号、创建人、创建时间、修改原因和内容摘要。同一个 Prompt 的新版本号 MUST 大于已有最大版本号，已创建版本的内容和修改审计信息 MUST NOT 被直接覆盖。
+系统 SHALL 为每次一次性 Prompt 内容变更创建独立版本，并保存完整 Prompt 正文、版本号、创建人、创建时间、修改原因和内容摘要。同一个 Prompt 的新版本号 MUST 大于已有最大版本号，已创建版本的内容和修改审计信息 MUST NOT 被直接覆盖。
 
 #### Scenario: Create a new version
 
-- **WHEN** 管理人员提交新的系统 Prompt、用户模板或输出约束，并填写大于当前最大版本号的版本号
+- **WHEN** 管理人员提交完整的一次性 Prompt 正文，并填写大于当前最大版本号的版本号
 - **THEN** 系统创建新的版本记录，并保留新旧版本的独立内容
 
 #### Scenario: Reject a non-increasing version
@@ -88,7 +88,7 @@
 
 ### Requirement: Version history is queryable
 
-系统 SHALL 提供按 Prompt 定义查询版本列表、状态、修改人、修改原因、发布时间和发布操作的能力，并支持查看任意两个版本的 Prompt 内容和配置差异。
+系统 SHALL 提供按 Prompt 定义查询版本列表、状态、修改人、修改原因、发布时间和发布操作的能力，并支持查看任意两个版本的完整 Prompt 正文差异。
 
 #### Scenario: Inspect version history
 
@@ -98,4 +98,4 @@
 #### Scenario: Compare two version contents
 
 - **WHEN** 管理人员选择同一 Prompt 定义下的两个版本进行比较
-- **THEN** 系统返回 Prompt 内容差异和配置差异
+- **THEN** 系统返回完整 Prompt 正文差异

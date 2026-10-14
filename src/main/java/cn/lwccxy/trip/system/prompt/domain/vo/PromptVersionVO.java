@@ -10,9 +10,7 @@ public class PromptVersionVO {
     private Long id;
     private Long promptId;
     private Integer versionNo;
-    private String systemPrompt;
-    private String userTemplate;
-    private String outputSchema;
+    private String promptContent;
     private String contentHash;
     private String versionStatus;
     private String changeReason;

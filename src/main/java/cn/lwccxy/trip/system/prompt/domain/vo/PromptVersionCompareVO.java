@@ -10,13 +10,7 @@ public class PromptVersionCompareVO {
     private Integer leftVersionNo;
     private Long rightVersionId;
     private Integer rightVersionNo;
-    private boolean systemPromptChanged;
-    private boolean userTemplateChanged;
-    private boolean outputSchemaChanged;
-    private String leftSystemPrompt;
-    private String rightSystemPrompt;
-    private String leftUserTemplate;
-    private String rightUserTemplate;
-    private String leftOutputSchema;
-    private String rightOutputSchema;
+    private boolean contentChanged;
+    private String leftPromptContent;
+    private String rightPromptContent;
 }

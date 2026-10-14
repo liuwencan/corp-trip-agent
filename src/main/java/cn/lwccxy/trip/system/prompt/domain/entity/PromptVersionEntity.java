@@ -18,11 +18,7 @@ public class PromptVersionEntity {
 
     private Integer versionNo;
 
-    private String systemPrompt;
-
-    private String userTemplate;
-
-    private String outputSchema;
+    private String promptContent;
 
     private String contentHash;
 

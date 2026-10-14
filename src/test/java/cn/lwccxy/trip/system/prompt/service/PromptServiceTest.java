@@ -194,9 +194,7 @@ class PromptServiceTest {
     private PromptVersionSaveForm versionForm(int versionNo) {
         PromptVersionSaveForm form = new PromptVersionSaveForm();
         form.setVersionNo(versionNo);
-        form.setSystemPrompt("You are a travel assistant.");
-        form.setUserTemplate("{message}");
-        form.setOutputSchema("{\"type\":\"object\"}");
+        form.setPromptContent("You are a travel assistant.\nHelp with business trips.");
         form.setChangeReason("改进出差申请信息收集");
         return form;
     }

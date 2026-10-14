@@ -14,11 +14,7 @@ public class PromptVersionSaveForm {
     private Integer versionNo;
 
     @NotBlank
-    private String systemPrompt;
-
-    private String userTemplate;
-
-    private String outputSchema;
+    private String promptContent;
 
     @NotBlank
     @Size(max = 1000)
