@@ -1,5 +1,6 @@
 package cn.lwccxy.trip.system.config.controller;
 
+import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.lwccxy.trip.common.response.PageResponse;
 import cn.lwccxy.trip.common.response.Response;
 import cn.lwccxy.trip.system.config.domain.form.ConfigQueryForm;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@SaCheckRole("ADMIN")
 @RequestMapping("/config")
 public class AdminConfigController {
 

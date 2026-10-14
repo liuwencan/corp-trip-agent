@@ -17,10 +17,17 @@ spring:
       test-while-idle: true
       validation-query: SELECT 1
       stat-view-servlet:
-        enabled: true
+        enabled: false
         url-pattern: /druid/*
-        login-username: admin
-        login-password: admin
+
+sa-token:
+  token-name: satoken
+  timeout: 86400
+  is-concurrent: true
+  is-share: false
+  is-read-header: true
+  is-read-cookie: false
+  is-read-body: false
 
 mybatis-plus:
   configuration:

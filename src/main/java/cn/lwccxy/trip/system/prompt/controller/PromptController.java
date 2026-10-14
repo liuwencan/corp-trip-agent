@@ -1,5 +1,6 @@
 package cn.lwccxy.trip.system.prompt.controller;
 
+import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.lwccxy.trip.common.response.PageResponse;
 import cn.lwccxy.trip.common.response.Response;
 import cn.lwccxy.trip.system.prompt.domain.form.PromptOperationForm;
@@ -29,6 +30,7 @@ import java.util.List;
 
 @Validated
 @RestController
+@SaCheckRole("ADMIN")
 @RequestMapping("/system/prompt")
 public class PromptController {
 

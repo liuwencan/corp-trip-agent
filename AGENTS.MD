@@ -2,6 +2,14 @@
 
 本文档是 CorpTripAgent 项目的开发、验证和交付规则。后续修改代码时，应先阅读本文档，并遵循项目现有的分层、响应格式、数据库结构和构建流程。
 
+## 开发环境
+
+- Java 21 可执行文件：`E:\environment\java\21\bin\java.exe`
+- Maven 安装目录：`E:\maven\apache-maven-3.9.12`
+- Maven 可执行文件：`E:\maven\apache-maven-3.9.12\bin\mvn.cmd`
+
+执行 Java 或 Maven 命令时，优先使用以上固定路径，无需重复搜索本地环境。
+
 ## 项目概况
 
 CorpTripAgent 是一个企业内部智能出差助手后端项目，当前为单模块 Maven 项目。
