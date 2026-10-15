@@ -83,3 +83,13 @@ CREATE TABLE `t_prompt_release_log` (
     KEY `idx_prompt_release_log` (`prompt_id`, `create_time`),
     KEY `idx_prompt_release_target` (`target_version_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='Prompt发布与回滚审计';
+
+CREATE TABLE IF NOT EXISTS agentscope_sessions (
+                                                   session_id VARCHAR(255) COLLATE utf8mb4_bin NOT NULL,
+    state_key  VARCHAR(255) COLLATE utf8mb4_bin NOT NULL,
+    item_index INT NOT NULL DEFAULT 0,
+    state_data LONGTEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (session_id, state_key, item_index)
+    ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

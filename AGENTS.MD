@@ -63,6 +63,7 @@ CorpTripAgent 是一个企业内部智能出差助手后端项目，当前为单
 10. 不提交密码、Token、私钥和本地环境配置。`application-local.yml`、`.env` 等本地配置只在本机使用。
 11. 修改范围应保持聚焦，不要顺手重构无关模块或覆盖已有未提交改动。
 12. 注释只解释不明显的业务规则、兼容处理或复杂算法；简单代码不添加重复性注释。
+13. DTO、Form、VO、Entity 等数据类统一使用 Lombok 注解简化 getter 和 setter，按需使用 `@Data`、`@Getter`、`@Setter`，不手写无业务逻辑的 getter/setter；需要参数归一化等自定义逻辑时，可保留对应方法。
 
 ## 动态配置约定
 

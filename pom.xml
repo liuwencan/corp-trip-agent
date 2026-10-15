@@ -54,6 +54,25 @@
             <version>${agentscope.version}</version>
         </dependency>
 
+        <!-- 阿里百炼dashscope模型 -->
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-extensions-model-dashscope</artifactId>
+            <version>${agentscope.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-dashscope-spring-boot-starter</artifactId>
+            <version>${agentscope.version}</version>
+        </dependency>
+
+<!--        <dependency>-->
+<!--            <groupId>io.agentscope</groupId>-->
+<!--            <artifactId>agentscope-extensions-mysql</artifactId>-->
+<!--            <version>${agentscope.version}</version>-->
+<!--        </dependency>-->
+
         <!-- MyBatis-Plus -->
         <dependency>
             <groupId>com.baomidou</groupId>
