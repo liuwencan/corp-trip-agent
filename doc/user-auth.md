@@ -2,7 +2,7 @@
 
 ## 范围
 
-认证接口使用 Sa-Token 的 `satoken` 请求头。匿名接口只有 `POST /auth/register` 和 `POST /auth/login`；其他应用接口需要登录。`USER` 不能访问 `/config/**`、`/system/prompt/**` 和 `/system/user/**`，这些接口需要 `ADMIN`。
+认证接口使用 Sa-Token，当前配置要求请求头 `Authorization: Bearer <tokenValue>`。请求头名称和前缀分别由 `sa-token.token-name`、`sa-token.token-prefix` 决定，登录响应会返回实际的 `tokenName` 和 `tokenPrefix`。匿名接口只有 `POST /auth/register` 和 `POST /auth/login`；其他应用接口需要登录。`USER` 不能访问 `/config/**`、`/system/prompt/**` 和 `/system/user/**`，这些接口需要 `ADMIN`。
 
 密码使用 BCrypt 哈希保存，不记录明文密码、临时密码、Token 或哈希。用户名去首尾空白并转为小写，规则为 3-32 位 ASCII 字母、数字或下划线；密码为 8-64 个字符且 UTF-8 不超过 72 字节。
 
@@ -28,10 +28,21 @@ MySQL DDL 自动提交，迁移失败不能依赖事务回滚；应根据 `SHOW 
 ## 接口
 
 - `POST /auth/register`：`{"username":"alice_1","password":"占位密码"}`，始终注册为 `USER`，不自动登录。
-- `POST /auth/login`：返回 `tokenName`、`tokenValue`、`expiresIn` 和安全用户信息。后续请求使用 `satoken: <tokenValue>`。
+- `POST /auth/login`：返回 `tokenName`、`tokenPrefix`、`tokenValue`、`expiresIn` 和安全用户信息。`tokenValue` 为不含前缀的原始 Token；后续请求头的值应由非空前缀、一个空格和 Token 拼接，未配置前缀时直接使用 Token。
 - `GET /auth/me`、`POST /auth/logout`、`PUT /auth/password`：当前用户信息、退出当前 Token、使用旧密码和新密码改密。
 - `POST /system/user/query`：管理员分页查询用户。
 - `POST /system/user/{id}/reset-password`：管理员线下核验后设置临时密码和核验说明；临时密码必须通过可信线下渠道告知，不由接口回显。
+
+前端应从登录响应的 `data` 中保存认证信息，并在所有受保护接口请求中携带，例如 Axios：
+
+```javascript
+const { tokenName, tokenPrefix, tokenValue } = loginResponse.data.data;
+api.defaults.headers.common[tokenName] = tokenPrefix
+  ? `${tokenPrefix} ${tokenValue}`
+  : tokenValue;
+```
+
+当前配置下，仅发送 `satoken: <tokenValue>` 或 `Authorization: <tokenValue>` 均无法通过认证。前端页面保存了登录状态并不代表后续 HTTP 请求已携带有效凭据；排查 `AUTH_NOT_LOGIN` 时先在浏览器 Network 中核对实际发出的请求头。
 
 管理员重置会撤销目标用户所有旧 Token，并设置“必须改密”。临时密码登录后只能访问本人信息、改密和退出；改密成功后必须重新登录。忘记密码没有邮箱、短信或只凭用户名的匿名重置通道。
 

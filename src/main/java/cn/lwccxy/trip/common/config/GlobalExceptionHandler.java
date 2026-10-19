@@ -21,8 +21,9 @@ public class GlobalExceptionHandler {
         int status = switch (ex.getErrorCode()) {
             case "AUTH_NOT_LOGIN", "AUTH_INVALID_CREDENTIALS" -> 401;
             case "AUTH_FORBIDDEN", "PASSWORD_CHANGE_REQUIRED" -> 403;
-            case "USER_ALREADY_EXISTS" -> 409;
-            case "USER_NOT_FOUND" -> 404;
+            case "USER_ALREADY_EXISTS", "CONVERSATION_BUSY", "CONVERSATION_STATE_INVALID" -> 409;
+            case "USER_NOT_FOUND", "RESOURCE_NOT_FOUND" -> 404;
+            case "AGENT_FAILED" -> 502;
             default -> 400;
         };
         return ResponseEntity.status(status).body(Response.fail(ex));

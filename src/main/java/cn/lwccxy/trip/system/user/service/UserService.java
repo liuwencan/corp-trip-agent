@@ -64,10 +64,14 @@ public class UserService extends ServiceImpl<UserMapper, UserEntity> {
         return Response.success(toVO(entity));
     }
 
+    /**
+     * 校验已有账号的登录凭据并创建会话，允许六位历史密码参与 BCrypt 比对。
+     */
     public Response<LoginVO> login(LoginForm form) {
         String username = normalizeUsername(form.getUsername());
         UserEntity entity = userMapper.selectByUsername(username);
-        if (!validUsername(username) || !validPassword(form.getPassword())) throw new BizException(UserErrorCode.INVALID_PARAMETER);
+        // 登录兼容已有的六位密码账号，注册及设置新密码仍执行八位最小长度规则。
+        if (!validUsername(username) || !validLoginPassword(form.getPassword())) throw new BizException(UserErrorCode.INVALID_PARAMETER);
         boolean matched = passwordEncoder.matches(form.getPassword(), entity == null ? dummyHash : entity.getPasswordHash());
         if (entity == null || !matched) {
             throw new BizException(UserErrorCode.AUTH_INVALID_CREDENTIALS);
@@ -76,7 +80,9 @@ public class UserService extends ServiceImpl<UserMapper, UserEntity> {
         String token = StpUtil.getTokenValue();
         StpUtil.getTokenSession().set(CurrentUser.CREDENTIAL_VERSION, entity.getCredentialVersion());
         LoginVO result = new LoginVO();
-        result.setTokenName("satoken");
+        // 返回鉴权实际使用的请求头和前缀，避免配置变更后客户端仍发送旧格式。
+        result.setTokenName(StpUtil.getTokenName());
+        result.setTokenPrefix(StpUtil.getStpLogic().getConfigOrGlobal().getTokenPrefix());
         result.setTokenValue(token);
         result.setExpiresIn(StpUtil.getTokenTimeout());
         result.setUser(toVO(entity));
@@ -191,6 +197,16 @@ public class UserService extends ServiceImpl<UserMapper, UserEntity> {
 
     public static boolean validPassword(String password) {
         return password != null && password.length() >= 8 && password.length() <= 64
+                && password.getBytes(StandardCharsets.UTF_8).length <= 72;
+    }
+
+    /**
+     * 校验登录凭据的长度，兼容六位密码并避免超过 BCrypt 的 UTF-8 字节上限。
+     * 新密码的强度校验仍由 validPassword 负责。
+     */
+    public static boolean validLoginPassword(String password) {
+        // 限制字符数和编码后的字节数，避免 BCrypt 截断导致不同密码匹配同一凭据。
+        return password != null && !password.isBlank() && password.length() >= 6 && password.length() <= 64
                 && password.getBytes(StandardCharsets.UTF_8).length <= 72;
     }
 
