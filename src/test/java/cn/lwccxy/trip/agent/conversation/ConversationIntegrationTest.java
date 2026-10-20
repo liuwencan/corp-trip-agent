@@ -11,6 +11,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.agentscope.core.event.*;
 import io.agentscope.core.message.AssistantMessage;
 import io.agentscope.core.message.GenerateReason;
+import io.agentscope.core.message.UserMessage;
+import io.agentscope.core.agent.RuntimeContext;
+import io.agentscope.core.model.Model;
+import io.agentscope.harness.agent.HarnessAgent;
 import jakarta.validation.Validation;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,7 +74,8 @@ class ConversationIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired ConversationService service;
     @Autowired ConversationCoordinator coordinator;
-    @MockitoBean AgentReplyGateway agent;
+    @MockitoBean(name = "masterAgent") HarnessAgent agent;
+    @MockitoBean(name = "strongModel") Model model;
     @MockitoSpyBean ConversationMapper conversationMapper;
     @MockitoSpyBean MessageMapper messageMapper;
     private String token;
@@ -85,8 +90,8 @@ class ConversationIntegrationTest {
         userId = call("POST", "/auth/register", null, Map.of("username", name, "password", password), 200).path("data").path("id").asLong();
         token = call("POST", "/auth/login", null, Map.of("username", name, "password", password), 200).path("data").path("tokenValue").asText();
         conversationId = create("first");
-        when(agent.modelName()).thenReturn("test-model");
-        when(agent.stream(anyLong(), anyString(), anyString())).thenAnswer(invocation -> Flux.defer(() -> {
+        when(model.getModelName()).thenReturn("test-model");
+        when(agent.streamEvents(any(UserMessage.class), any(RuntimeContext.class))).thenAnswer(invocation -> Flux.defer(() -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM t_message WHERE conversation_id=? AND role='USER'", Long.class, conversationId)).isPositive();
             return Flux.just(new TextBlockDeltaEvent("r", "b", "answer"), new AgentResultEvent(new AssistantMessage("answer")));
@@ -95,7 +100,7 @@ class ConversationIntegrationTest {
 
     private JsonNode call(String method, String path, String auth, Object body, int status) throws Exception {
         var request = MockMvcRequestBuilders.request(org.springframework.http.HttpMethod.valueOf(method), path);
-        if (auth != null) request.header("satoken", auth);
+        if (auth != null) request.header("Authorization", "Bearer " + auth);
         if (body != null) request.contentType("application/json").content(json.writeValueAsBytes(body));
         var response = mvc.perform(request).andReturn().getResponse();
         assertThat(response.getStatus()).as(response.getContentAsString()).isEqualTo(status);
@@ -107,8 +112,9 @@ class ConversationIntegrationTest {
     }
     private String path() { return "/agent/conversations/" + conversationId; }
     private MvcResult start(String content) throws Exception {
-        return mvc.perform(MockMvcRequestBuilders.post(path() + "/messages").header("satoken", token)
-                .contentType("application/json").content(json.writeValueAsBytes(Map.of("content", content))))
+        return mvc.perform(MockMvcRequestBuilders.post("/chat/chat").header("Authorization", "Bearer " + token)
+                .contentType("application/json").content(json.writeValueAsBytes(
+                        Map.of("conversationId", conversationId, "question", content))))
                 .andReturn();
     }
     private String finish(MvcResult started) throws Exception {
@@ -126,7 +132,8 @@ class ConversationIntegrationTest {
     @Test void actualHttpServerHistoryLifecycle() throws Exception {
         var client = java.net.http.HttpClient.newHttpClient();
         long second = http(client, "POST", "/agent/conversations", Map.of("title", "second"), 200).path("data").path("id").asLong();
-        String sse = httpBody(client, "POST", path() + "/messages", Map.of("content", "network"), 200);
+        String sse = httpBody(client, "POST", "/chat/chat",
+                Map.of("conversationId", conversationId, "question", "network"), 200);
         assertThat(sse).contains("event:init", "event:delta", "event:complete");
         assertThat(http(client, "GET", "/agent/conversations", null, 200).path("data").get(0).path("id").asLong()).isEqualTo(conversationId);
         var messages = http(client, "GET", path()+"/messages?pageSize=1&pageNo=2", null, 200);
@@ -152,7 +159,7 @@ class ConversationIntegrationTest {
         var publisher = body == null ? java.net.http.HttpRequest.BodyPublishers.noBody()
                 : java.net.http.HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body));
         var request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:"+port+url))
-                .header("satoken", token).header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + token).header("Content-Type", "application/json")
                 .timeout(java.time.Duration.ofSeconds(15)).method(method, publisher).build();
         var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).as(response.body()).isEqualTo(status);
@@ -163,7 +170,7 @@ class ConversationIntegrationTest {
         CountDownLatch subscribed = new CountDownLatch(1);
         CountDownLatch cancelled = new CountDownLatch(1);
         doReturn(Flux.<AgentEvent>never().doOnSubscribe(s -> subscribed.countDown()).doOnCancel(cancelled::countDown))
-                .when(agent).stream(anyLong(), anyString(), anyString());
+                .when(agent).streamEvents(any(UserMessage.class), any(RuntimeContext.class));
         MvcResult started = start("timeout");
         assertThat(subscribed.await(5, TimeUnit.SECONDS)).isTrue();
         var context = (org.springframework.mock.web.MockAsyncContext) started.getRequest().getAsyncContext();
@@ -186,7 +193,7 @@ class ConversationIntegrationTest {
         call("GET", path(), token, null, 404);
         call("GET", path() + "/messages", token, null, 404);
         call("PUT", path(), token, Map.of("title", "no"), 404);
-        call("POST", path() + "/messages", token, Map.of("content", "no"), 404);
+        call("POST", "/chat/chat", token, Map.of("question", "no", "conversationId", conversationId), 404);
         call("PUT", feedbackPath(1), token, Map.of("feedback", "LIKE"), 404);
         call("POST", "/chat/chat", token, Map.of("question", "hello", "conversationId", conversationId), 404);
         verifyNoInteractions(agent);
@@ -220,7 +227,8 @@ class ConversationIntegrationTest {
         call("PUT", path(), token, Map.of(), 400);
         call("PUT", path(), token, Map.of("status", "BAD"), 400);
         for (String text : List.of(" ", "x".repeat(20001))) {
-            call("POST", path() + "/messages", token, Map.of("content", text), 400);
+            call("POST", "/chat/chat", token,
+                    Map.of("conversationId", conversationId, "question", text), 400);
         }
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             var validator = factory.getValidator();
@@ -264,7 +272,8 @@ class ConversationIntegrationTest {
             call("PUT", path(), token, Map.of("status", status), 200);
             assertThat(service.detail(userId, conversationId).getUpdateTime()).isEqualTo(before);
             call("PUT", path(), token, Map.of("status", "ACTIVE"), 409);
-            call("POST", path() + "/messages", token, Map.of("content", "no"), 409);
+            call("POST", "/chat/chat", token,
+                    Map.of("conversationId", conversationId, "question", "no"), 409);
             assertThat(call("GET", "/agent/conversations", token, null, 200).path("data")).isEmpty();
             assertThat(call("GET", "/agent/conversations?status=" + status, token, null, 200).path("totalCount").asLong()).isEqualTo(1);
         }
@@ -354,16 +363,14 @@ class ConversationIntegrationTest {
         assertThat(first).contains("event:init", "event:delta", "event:complete").doesNotContain("event:error");
         assertThat(first.indexOf("event:init")).isLessThan(first.indexOf("event:complete"));
         finish(start("again"));
-        String session = jdbc.queryForObject("SELECT runtime_session_id FROM t_conversation WHERE id=?", String.class, conversationId);
-        verify(agent).stream(userId, session, "hello");
-        verify(agent).stream(userId, session, "again");
+        verify(agent, times(2)).streamEvents(any(UserMessage.class), any(RuntimeContext.class));
         assertThat(service.detail(userId, conversationId).getMessageCount()).isEqualTo(4);
         assertThat(jdbc.queryForObject("SELECT content FROM t_message WHERE conversation_id=? AND role='ASSISTANT' ORDER BY id LIMIT 1", String.class, conversationId)).isEqualTo("answer");
         call("POST", "/chat/chat", token, Map.of("question", "hello", "sessionId", "untrusted"), 400);
     }
 
     @Test void modelFailureKeepsUserAndDoesNotInventReply() throws Exception {
-        when(agent.stream(anyLong(), anyString(), anyString())).thenReturn(Flux.concat(
+        when(agent.streamEvents(any(UserMessage.class), any(RuntimeContext.class))).thenReturn(Flux.concat(
                 Flux.just(new TextBlockDeltaEvent("r", "b", "partial")), Flux.error(new IllegalStateException("simulated"))));
         String response = finish(start("hello"));
         assertThat(response).contains("event:delta", "event:error").doesNotContain("event:complete", "simulated");
@@ -373,10 +380,10 @@ class ConversationIntegrationTest {
     }
 
     @Test void interruptedOrMissingFinalResultIsNotSuccess() throws Exception {
-        when(agent.stream(anyLong(), anyString(), anyString())).thenReturn(Flux.just(new AgentResultEvent(
+        when(agent.streamEvents(any(UserMessage.class), any(RuntimeContext.class))).thenReturn(Flux.just(new AgentResultEvent(
                 new AssistantMessage("partial").withGenerateReason(GenerateReason.INTERRUPTED))));
         assertThat(finish(start("one"))).contains("event:error").doesNotContain("event:complete");
-        when(agent.stream(anyLong(), anyString(), anyString())).thenReturn(Flux.just(new TextBlockDeltaEvent("r", "b", "partial")));
+        when(agent.streamEvents(any(UserMessage.class), any(RuntimeContext.class))).thenReturn(Flux.just(new TextBlockDeltaEvent("r", "b", "partial")));
         assertThat(finish(start("two"))).contains("event:error").doesNotContain("event:complete");
         assertThat(service.detail(userId, conversationId).getMessageCount()).isEqualTo(2);
     }
@@ -386,7 +393,7 @@ class ConversationIntegrationTest {
             doThrow(new IllegalStateException("simulated persistence failure")).when(conversationMapper)
                     .appended(eq(userId), eq(conversationId), nullable(String.class));
             return Flux.just(new AgentResultEvent(new AssistantMessage("answer")));
-        }).when(agent).stream(anyLong(), anyString(), anyString());
+        }).when(agent).streamEvents(any(UserMessage.class), any(RuntimeContext.class));
         assertThat(finish(start("hello"))).contains("event:error").doesNotContain("event:complete");
         assertThat(service.detail(userId, conversationId).getMessageCount()).isEqualTo(1);
     }
@@ -395,7 +402,7 @@ class ConversationIntegrationTest {
         Sinks.Many<AgentEvent> sink = Sinks.many().unicast().onBackpressureBuffer();
         CountDownLatch subscribed = new CountDownLatch(1);
         AtomicInteger calls = new AtomicInteger();
-        when(agent.stream(anyLong(), anyString(), anyString())).thenAnswer(invocation -> {
+        when(agent.streamEvents(any(UserMessage.class), any(RuntimeContext.class))).thenAnswer(invocation -> {
             if (calls.incrementAndGet() == 1) return sink.asFlux().doOnSubscribe(s -> subscribed.countDown());
             return Flux.just(new AgentResultEvent(new AssistantMessage("second")));
         });

@@ -33,7 +33,7 @@ public class MasterAgent {
                 .model(model) // 模型装配
                 .agentId("matser-1")
                 .sysPrompt("你是一个主智能体，负责协调各个子智能体")
-                .stateStore(new MysqlAgentStateStore(dataSource));
+                .stateStore(new MysqlAgentStateStore(dataSource, true));
         HarnessAgent masterAgent = builder.build();
         return masterAgent;
     }
