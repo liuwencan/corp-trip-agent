@@ -19,7 +19,7 @@
 
     <properties>
         <java.version>21</java.version>
-        <agentscope.version>2.0.3</agentscope.version>
+        <agentscope.version>2.0.0</agentscope.version>
         <mybatis-plus.version>3.5.9</mybatis-plus.version>
         <druid.version>1.2.23</druid.version>
         <fastjson.version>2.0.43</fastjson.version>
@@ -48,9 +48,10 @@
             <artifactId>spring-boot-starter-test</artifactId>
         </dependency>
 
+
         <dependency>
             <groupId>io.agentscope</groupId>
-            <artifactId>agentscope-harness</artifactId>
+            <artifactId>agentscope</artifactId>
             <version>${agentscope.version}</version>
         </dependency>
 
@@ -67,11 +68,17 @@
             <version>${agentscope.version}</version>
         </dependency>
 
-<!--        <dependency>-->
-<!--            <groupId>io.agentscope</groupId>-->
-<!--            <artifactId>agentscope-extensions-mysql</artifactId>-->
-<!--            <version>${agentscope.version}</version>-->
-<!--        </dependency>-->
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-spring-boot-starter</artifactId>
+            <version>2.0.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-extensions-session-mysql</artifactId>
+            <version>2.0.0-RC1</version>
+        </dependency>
 
         <!-- MyBatis-Plus -->
         <dependency>

@@ -1,7 +1,6 @@
 package cn.lwccxy.trip.common.model;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import cn.lwccxy.trip.business.conversation.domain.form.ConversationRequestForm;
@@ -16,6 +15,6 @@ public class ChatRequestDTO extends ConversationRequestForm {
     @Size(max = 20000)
     private String question;
 
-    @NotNull @Positive
+    @Positive
     private Long conversationId;
 }

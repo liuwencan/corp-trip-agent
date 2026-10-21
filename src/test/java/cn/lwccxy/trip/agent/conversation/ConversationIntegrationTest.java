@@ -14,7 +14,7 @@ import io.agentscope.core.message.GenerateReason;
 import io.agentscope.core.message.UserMessage;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.model.Model;
-import io.agentscope.harness.agent.HarnessAgent;
+import io.agentscope.harness.agent.ReactAgent;
 import jakarta.validation.Validation;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,7 +74,7 @@ class ConversationIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired ConversationService service;
     @Autowired ConversationCoordinator coordinator;
-    @MockitoBean(name = "masterAgent") HarnessAgent agent;
+    @MockitoBean(name = "masterAgent") ReactAgent agent;
     @MockitoBean(name = "strongModel") Model model;
     @MockitoSpyBean ConversationMapper conversationMapper;
     @MockitoSpyBean MessageMapper messageMapper;
