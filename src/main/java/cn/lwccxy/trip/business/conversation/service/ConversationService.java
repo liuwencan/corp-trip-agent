@@ -80,10 +80,9 @@ public class ConversationService {
                 messages.countOwned(userId, id), form.getPageSize());
     }
 
-    public MessageVO append(Long userId, Long id, MessageRole role, String content, String modelName, String traceId) {
+    public MessageVO append(Long userId, Long id, MessageRole role, String content, String modelName) {
         positive(id);
-        if (role == null || content == null || content.isBlank() || (modelName != null && modelName.length() > 128)
-                || (traceId != null && traceId.length() > 64)) invalid();
+        if (role == null || content == null || content.isBlank() || (modelName != null && modelName.length() > 128)) invalid();
         return transactions.execute(tx -> {
             ConversationEntity conversation = require(conversations.lockOwned(userId, id));
             if (!"ACTIVE".equals(conversation.getStatus())) throw new BizException(ConversationErrorCode.CONVERSATION_STATE_INVALID);
@@ -95,7 +94,7 @@ public class ConversationService {
             message.setModelName(modelName);
             message.setCreatedBy(userId);
             changed(messages.insert(message));
-            changed(conversations.appended(userId, id, traceId));
+            changed(conversations.appended(userId, id));
             return messageVO(require(messages.lockOwned(userId, id, message.getId())));
         });
     }

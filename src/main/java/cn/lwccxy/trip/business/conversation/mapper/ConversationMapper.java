@@ -22,8 +22,8 @@ public interface ConversationMapper extends BaseMapper<ConversationEntity> {
                                       @Param("offset") long offset, @Param("limit") long limit);
 
     @Update("UPDATE t_conversation SET message_count=message_count+1, "
-            + "update_time=GREATEST(update_time,CURRENT_TIMESTAMP(6)), trace_id=#{traceId} WHERE id=#{id} AND user_id=#{userId}")
-    int appended(@Param("userId") Long userId, @Param("id") Long id, @Param("traceId") String traceId);
+            + "update_time=GREATEST(update_time,CURRENT_TIMESTAMP(6)) WHERE id=#{id} AND user_id=#{userId}")
+    int appended(@Param("userId") Long userId, @Param("id") Long id);
 
     @Update("UPDATE t_conversation SET title=#{title},status=#{status}, "
             + "update_time=GREATEST(update_time,CURRENT_TIMESTAMP(6)) WHERE id=#{id} AND user_id=#{userId}")

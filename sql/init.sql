@@ -101,7 +101,6 @@ CREATE TABLE `t_conversation` (
     `status` varchar(16) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE/ARCHIVED/CLOSED',
     `runtime_session_id` varchar(255) COLLATE utf8mb4_bin NOT NULL COMMENT '服务端生成的AgentScope会话映射',
     `message_count` int NOT NULL DEFAULT 0 COMMENT '已持久化消息数',
-    `trace_id` varchar(64) DEFAULT NULL COMMENT '会话级最近链路标识',
     `create_time` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '创建时间',
     `update_time` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '更新时间',
     PRIMARY KEY (`id`),

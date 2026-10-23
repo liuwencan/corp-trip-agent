@@ -1,10 +1,12 @@
 package cn.lwccxy.trip.agent;
 
 import cn.lwccxy.trip.agent.middleware.HumanInTheLoopMiddleware;
+import cn.lwccxy.trip.agent.middleware.ToolExecuteStoreMiddleware;
 import cn.lwccxy.trip.agent.tools.AskUserTool;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.tool.Toolkit;
+import io.agentscope.core.tool.mcp.McpClientBuilder;
 import io.agentscope.core.tool.mcp.McpClientWrapper;
 import io.agentscope.core.tool.subagent.SubAgentConfig;
 import io.agentscope.core.tool.subagent.SubAgentTool;
@@ -16,6 +18,7 @@ import org.springframework.context.annotation.Scope;
 import reactor.core.publisher.Mono;
 
 import javax.sql.DataSource;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -27,15 +30,17 @@ public class MasterAgent {
     private final TripRequestAgent tripRequestAgent;
     private final GeneralInfoAgent generalInfoAgent;
     private final ItineraryPlanningAgent itineraryPlanningAgent;
+    private final ToolExecuteStoreMiddleware toolExecuteStoreMiddleware;
 
     /** 创建主智能体配置。 */
     public MasterAgent(DataSource dataSource, Model model, TripRequestAgent tripRequestAgent,
-                       GeneralInfoAgent generalInfoAgent, ItineraryPlanningAgent itineraryPlanningAgent) {
+                       GeneralInfoAgent generalInfoAgent, ItineraryPlanningAgent itineraryPlanningAgent, ToolExecuteStoreMiddleware toolExecuteStoreMiddleware) {
         this.dataSource = dataSource;
         this.model = model;
         this.tripRequestAgent = tripRequestAgent;
         this.generalInfoAgent = generalInfoAgent;
         this.itineraryPlanningAgent = itineraryPlanningAgent;
+        this.toolExecuteStoreMiddleware = toolExecuteStoreMiddleware;
     }
 
     /** 为每次对话创建隔离的主智能体及其差旅子智能体工具。 */
@@ -66,6 +71,14 @@ public class MasterAgent {
 
         toolkit.registerTool(new AskUserTool());
 
+        // 阿里云天气MCP接入
+        // https://market.aliyun.com/detail/cmapi00074002?spm=5176.29867242_210807074.0.0.44e83e7eLgrp1C
+        McpClientWrapper mcpClientWrapper = McpClientBuilder.create("remote-mcp")
+                .streamableHttpTransport("http://mcpservergateway.market.alicloudapi.com/mcpnacos/cmapi00074002/eyJhcHBDb2RlIjoiMWFlN2FkOWY0YmU1NDFjNjllZjAxYzE2ZjMwMGM0YTMiLCJzIjoiQ2xvdWRfTWFya2V0In0=")
+                .timeout(Duration.ofSeconds(60))
+                .buildAsync()
+                .block();
+        toolkit.registerMcpClient(mcpClientWrapper).block();
 
         return ReActAgent.builder()
                 .name("MasterAgent")
@@ -73,7 +86,7 @@ public class MasterAgent {
                 .model(model)
                 .sysPrompt("你是企业智能差旅助手主智能体。根据用户请求选择并调用差旅单管理、通用信息和行程规划工具。涉及差旅单状态变更时先确认用户意图并使用差旅单工具；审批结果只能来自业务工具，不能自行判定。行程规划需提供可比较方案并让用户决策，不得将方案选择或预订视为用户已确认。对于工具尚未支持的操作，明确告知用户，不得虚构已完成的查询、审批或预订。如果不确定用户的意图，可以调用ask_user工具")
                 .toolkit(toolkit)
-                .middleware(new HumanInTheLoopMiddleware())
+                .middleware(toolExecuteStoreMiddleware)
                 .stateStore(new MysqlAgentStateStore(dataSource, "corptrip", "agentscope_sessions", true)) // 上下文持久化组件
                 .build();
     }

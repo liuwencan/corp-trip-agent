@@ -1,6 +1,5 @@
 package cn.lwccxy.trip.business.chat;
 
-import cn.lwccxy.trip.agent.middleware.HumanInTheLoopMiddleware;
 import cn.lwccxy.trip.business.conversation.domain.entity.ConversationEntity;
 import cn.lwccxy.trip.business.conversation.domain.entity.MessageEntity;
 import cn.lwccxy.trip.business.conversation.domain.form.CreateConversationForm;
@@ -14,14 +13,14 @@ import cn.lwccxy.trip.business.conversation.service.ConversationCoordinator;
 import cn.lwccxy.trip.business.conversation.service.ConversationService;
 import cn.lwccxy.trip.common.exception.BizException;
 import cn.lwccxy.trip.common.response.Response;
-import cn.lwccxy.trip.common.sse.SseEmitterRegistry;
+import cn.lwccxy.trip.agent.enums.SseEventEnum;
+import cn.lwccxy.trip.agent.middleware.HumanInTheLoopMiddleware;
+import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
+import cn.lwccxy.trip.agent.sse.SseEmitterSender;
 import cn.lwccxy.trip.common.util.SpringContextUtil;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.agent.RuntimeContext;
-import io.agentscope.core.event.AgentEvent;
-import io.agentscope.core.event.AgentResultEvent;
-import io.agentscope.core.event.RequireUserConfirmEvent;
-import io.agentscope.core.event.TextBlockDeltaEvent;
+import io.agentscope.core.event.*;
 import io.agentscope.core.message.*;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.state.AgentState;
@@ -36,14 +35,11 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import java.util.function.BiFunction;
 
 /** 负责执行主智能体流式对话，并将事件推送给调用方。 */
@@ -60,10 +56,33 @@ public class ChatAgentPipeline {
 
     /** 为当前用户执行一次会话，先保存用户消息，再通过服务端事件推送智能体响应。 */
     public SseEmitter execute(Long userId, Long conversationId, String question) {
+        // 1. 问题校验
         validateQuestion(question);
+        // 2. 会话创建
         ConversationEntity conversation = ensureConversation(userId, conversationId, question);
-        return executeStream(userId, conversation, question,
-                (agent, runtimeContext) -> agent.streamEvents(new UserMessage(question), runtimeContext));
+        // 3. 问题持久化
+        MessageVO userMessage = question == null ? null : append(userId, conversationId,
+                MessageRole.USER, question, null);
+        // 4. 注册SSE
+        SseEmitter emitter = new SseEmitter(240_000L);
+        sseEmitterRegistry.register(conversationId.toString(), emitter);
+        // 构建运行时上下文并沿用会话已有的 AgentScope session。
+        RuntimeContext runtimeContext = RuntimeContext.builder().userId(userId.toString())
+                .sessionId(conversationId.toString()).build();
+
+        // 主智能体
+        ReActAgent masterAgent = SpringContextUtil.getBean("masterAgent", ReActAgent.class);
+        Flux<AgentEvent> agentEventFlux = masterAgent.streamEvents(List.of(new UserMessage(question)), runtimeContext);
+        agentEventFlux.subscribe(event -> {
+            if(event instanceof TextBlockDeltaEvent){
+                SseEmitterSender.send(emitter, SseEventEnum.DELTA, ((TextBlockDeltaEvent) event).getDelta());
+            }
+        },
+                throwable -> {
+                    log.error(throwable.getMessage());
+                });
+
+        return emitter;
     }
 
     /** 将用户对澄清问题的回答作为工具结果提交，并恢复指定的智能体会话。 */
@@ -76,71 +95,72 @@ public class ChatAgentPipeline {
 
         return executeStream(userId, conversation, answer,
                 (agent, runtimeContext) -> resumeAgent(agent, runtimeContext, toolCallId, answer));
-
-        // 注册SSEEmitter
-
-
     }
 
     /** 持久化当前消息并启动一次 AgentScope 流式执行。 */
     private SseEmitter executeStream(Long userId, ConversationEntity conversation, String question,
                                      BiFunction<ReActAgent, RuntimeContext, Flux<AgentEvent>> streamFactory) {
-        Long actualConversationId = conversation.getId();
-        ConversationCoordinator.Lease lease = coordinator.acquire(actualConversationId, true);
-        String traceId = UUID.randomUUID().toString();
+        Long conversationId = conversation.getId();
+        String sessionId = conversation.getRuntimeSessionId();
+        ConversationCoordinator.Lease lease = coordinator.acquire(conversationId, true);
+        AtomicBoolean terminal = new AtomicBoolean();
+        AtomicBoolean waitingForUser = new AtomicBoolean();
+        AtomicReference<Disposable> subscription = new AtomicReference<>();
+        AtomicReference<String> answer = new AtomicReference<>();
+        SseEmitter emitter = new SseEmitter(240_000L);
+
         try {
-            // 先保存用户问题，确保智能体创建或调用失败时仍保留本轮输入。
-            MessageVO userMessage = question == null ? null : append(userId, actualConversationId,
-                    MessageRole.USER, question, null, traceId);
-            SseEmitter emitter = new SseEmitter(240_000L);
-            // 让其他业务能够按用户查找当前对话连接并推送异步事件。
-            sseEmitterRegistry.register(userId, emitter);
-            AtomicBoolean terminal = new AtomicBoolean();
-            AtomicBoolean waitingForUser = new AtomicBoolean();
-            AtomicReference<Disposable> subscription = new AtomicReference<>();
-            AtomicReference<String> answer = new AtomicReference<>();
+            // 保存本轮输入并登记会话连接，使新消息与恢复消息共用相同的生命周期管理。
+            MessageVO userMessage = question == null ? null : append(userId, conversationId,
+                    MessageRole.USER, question, null);
+            sseEmitterRegistry.register(sessionId, emitter);
             emitter.onTimeout(() -> cancel(lease, terminal, subscription));
             emitter.onError(error -> cancel(lease, terminal, subscription));
             emitter.onCompletion(() -> cancel(lease, terminal, subscription));
-
             if (userMessage == null) {
-                sendEvent(emitter, "init", Map.of("conversationId", actualConversationId));
+                sendEvent(emitter, SseEventEnum.INIT, Map.of("conversationId", conversationId));
             } else {
-                sendEvent(emitter, "init", Map.of("conversationId", actualConversationId,
+                sendEvent(emitter, SseEventEnum.INIT, Map.of("conversationId", conversationId,
                         "messageId", userMessage.getId()));
             }
+
+            // 构建运行时上下文并沿用会话已有的 AgentScope session。
             RuntimeContext runtimeContext = RuntimeContext.builder().userId(userId.toString())
                     .sessionId(conversation.getRuntimeSessionId()).build();
-            // 将工具参数交给当前 SSE 连接，供前端构建澄清交互界面。
+            // 中间件使用此回调发送 ask_user 工具参数，等待当前会话继续操作。
             runtimeContext.put(HumanInTheLoopMiddleware.ASK_USER_CALLBACK_KEY,
-                    (Consumer<ToolUseBlock>) tool -> {
+                    (java.util.function.Consumer<ToolUseBlock>) tool -> {
                         waitingForUser.set(true);
-                        sendEvent(emitter, "ask", Map.of("conversationId", actualConversationId,
+                        sendEvent(emitter, SseEventEnum.ASK, Map.of("conversationId", conversationId,
                                 "toolCallId", tool.getId(), "input", tool.getInput(),
                                 "delta", tool.getInput()));
                     });
 
+            // 主智能体
+            ReActAgent masterAgent = SpringContextUtil.getBean("masterAgent", ReActAgent.class);
+
             Disposable active = Flux.using(
-                            () -> SpringContextUtil.getBean("masterAgent", ReActAgent.class),
+                            () -> masterAgent,
                             agent -> streamFactory.apply(agent, runtimeContext),
                             ReActAgent::close)
                     .subscribeOn(Schedulers.boundedElastic())
-                    // 在事件到达时转发增量内容并记录最终回复。
-                    .doOnNext(event -> handleEvent(emitter, actualConversationId, answer, waitingForUser, event))
-                    .doOnError(error -> handleError(emitter, lease, terminal, actualConversationId, error))
+                    // 将事件增量推送给前端，并收集最终回复及人工澄清状态。
+                    .doOnNext(event -> handleEvent(emitter, conversationId, answer, waitingForUser, event))
+                    .doOnError(error -> handleError(emitter, lease, terminal, conversationId, error))
                     .onErrorComplete()
-                    .doOnComplete(() -> handleComplete(emitter, lease, terminal, actualConversationId,
-                            userId, traceId, answer.get(), waitingForUser.get()))
+                    .doOnComplete(() -> handleComplete(emitter, lease, terminal, conversationId,
+                            userId, answer.get(), waitingForUser.get()))
                     .subscribe();
             subscription.set(active);
             if (terminal.get()) {
                 active.dispose();
             }
-            return emitter;
         } catch (RuntimeException ex) {
             lease.close();
             throw ex;
         }
+
+        return emitter;
     }
 
     /** 根据持久化的工具调用构造成功结果，交给 AgentScope 恢复挂起的智能体。 */
@@ -200,7 +220,9 @@ public class ChatAgentPipeline {
 
     /** 校验会话归属；不存在时根据首个问题创建新的活动会话。 */
     private ConversationEntity ensureConversation(Long userId, Long conversationId, String question) {
+        // 1. 查询会话是否存在
         ConversationEntity conversation = conversationId == null ? null : conversationMapper.selectById(conversationId);
+        // 2. 存在, 判断会话归属
         if (conversation != null) {
             if (!userId.equals(conversation.getUserId())) {
                 throw new BizException(ConversationErrorCode.RESOURCE_NOT_FOUND);
@@ -208,7 +230,10 @@ public class ChatAgentPipeline {
             return conversation;
         }
         CreateConversationForm form = new CreateConversationForm();
+        // 不存在, 先截取用户第一个问题的前五个字符, 先进行持久化
+        // 后续通过异步线程利用【轻量级大模型】去做标题摘要
         form.setTitle(firstQuestionTitle(question));
+
         ConversationVO created = conversations.create(userId, form);
         return conversations.owned(userId, created.getId());
     }
@@ -228,34 +253,110 @@ public class ChatAgentPipeline {
     }
 
     /** 将智能体增量事件推送给前端，并保存最终 assistant 回复。 */
-    private void handleEvent(SseEmitter emitter, Long conversationId,
-                             AtomicReference<String> answer, AtomicBoolean waitingForUser,
-                             AgentEvent agentEvent) {
-        // 增量文本
-        if (agentEvent instanceof TextBlockDeltaEvent text) {
-            sendEvent(emitter, "delta", Map.of("conversationId", conversationId,
-                    "delta", text.getDelta()));
+    private void handleEvent(SseEmitter emitter, Long conversationId, AtomicReference<String> answer,
+                             AtomicBoolean waitingForUser, AgentEvent agentEvent) {
+        if (agentEvent instanceof AgentStartEvent event) {
+            sendEvent(emitter, SseEventEnum.STATUS, eventPayload(conversationId, "status", "EXECUTING",
+                    "agentName", event.getName(), "message", "Agent开始执行"));
             return;
         }
-
-        if (agentEvent instanceof RequireUserConfirmEvent requireUserConfirmEvent) {
-            List<ToolUseBlock> toolCalls = requireUserConfirmEvent.getToolCalls();
-            // 权限确认事件用于需要人工批准的工具，澄清问题参数由中间件单独推送。
-            sendEvent(emitter, "confirm", Map.of("conversationId", conversationId,
-                    "toolCalls", toolCalls));
+        if (agentEvent instanceof AgentEndEvent) {
+            sendEvent(emitter, SseEventEnum.STATUS, eventPayload(conversationId, "status", "AGENT_FINISHED"));
             return;
         }
-
-        if (agentEvent instanceof AgentResultEvent resultEvent) {
-            var message = resultEvent.getResult();
+        if (agentEvent instanceof ModelCallStartEvent event) {
+            sendEvent(emitter, SseEventEnum.STATUS, eventPayload(conversationId, "status", "THINKING",
+                    "replyId", event.getReplyId()));
+            return;
+        }
+        if (agentEvent instanceof ModelCallEndEvent event) {
+            sendEvent(emitter, SseEventEnum.STATUS, eventPayload(conversationId, "status", "MODEL_FINISHED",
+                    "replyId", event.getReplyId(), "usage", event.getUsage()));
+            return;
+        }
+        if (agentEvent instanceof ThinkingBlockStartEvent event) {
+            sendEvent(emitter, SseEventEnum.THINKING, eventPayload(conversationId, "phase", "start",
+                    "replyId", event.getReplyId(), "blockId", event.getBlockId()));
+            return;
+        }
+        if (agentEvent instanceof ThinkingBlockDeltaEvent event) {
+            sendEvent(emitter, SseEventEnum.THINKING, eventPayload(conversationId, "phase", "delta",
+                    "replyId", event.getReplyId(), "blockId", event.getBlockId(), "delta", event.getDelta()));
+            return;
+        }
+        if (agentEvent instanceof ThinkingBlockEndEvent event) {
+            sendEvent(emitter, SseEventEnum.THINKING, eventPayload(conversationId, "phase", "end",
+                    "replyId", event.getReplyId(), "blockId", event.getBlockId()));
+            return;
+        }
+        if (agentEvent instanceof ToolCallStartEvent event) {
+            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "calling",
+                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName()));
+            return;
+        }
+        if (agentEvent instanceof ToolCallDeltaEvent event) {
+            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "input",
+                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName(),
+                    "delta", event.getDelta()));
+            return;
+        }
+        if (agentEvent instanceof ToolCallEndEvent event) {
+            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "input_complete",
+                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName()));
+            return;
+        }
+        if (agentEvent instanceof ToolResultStartEvent event) {
+            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "executing",
+                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName()));
+            return;
+        }
+        if (agentEvent instanceof ToolResultTextDeltaEvent event) {
+            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "result_delta",
+                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName(),
+                    "delta", event.getDelta()));
+            return;
+        }
+        if (agentEvent instanceof ToolResultDataDeltaEvent event) {
+            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "result_data",
+                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName(),
+                    "data", event.getData()));
+            return;
+        }
+        if (agentEvent instanceof ToolResultEndEvent event) {
+            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "completed",
+                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName(),
+                    "state", event.getState()));
+            return;
+        }
+        if (agentEvent instanceof TextBlockDeltaEvent event) {
+            sendEvent(emitter, SseEventEnum.DELTA, eventPayload(conversationId, "delta", event.getDelta(),
+                    "replyId", event.getReplyId(), "blockId", event.getBlockId()));
+            return;
+        }
+        if (agentEvent instanceof RequireUserConfirmEvent event) {
+            sendEvent(emitter, SseEventEnum.CONFIRM, eventPayload(conversationId,
+                    "toolCalls", event.getToolCalls()));
+            return;
+        }
+        if (agentEvent instanceof RequireExternalExecutionEvent event) {
+            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "external_execution_required",
+                    "toolCalls", event.getToolCalls()));
+            return;
+        }
+        if (agentEvent instanceof AgentResultEvent event) {
+            Msg message = event.getResult();
             if (message == null) {
                 throw new BizException(ConversationErrorCode.AGENT_FAILED);
             }
             GenerateReason reason = message.getGenerateReason();
             if (reason == GenerateReason.TOOL_SUSPENDED) {
-                // 问题已通过 ask 事件发给前端，本轮等待用户补充输入。
+                // ask 事件已提供澄清内容，本轮应等待用户提交答案后再继续执行。
                 waitingForUser.set(true);
                 return;
+            }
+            for (ThinkingBlock thinking : message.getContentBlocks(ThinkingBlock.class)) {
+                sendEvent(emitter, SseEventEnum.THINKING, eventPayload(conversationId, "phase", "complete",
+                        "thinking", thinking.getThinking(), "metadata", thinking.getMetadata()));
             }
             if (message.getRole() != MsgRole.ASSISTANT
                     || (reason != null && reason != GenerateReason.MODEL_STOP
@@ -263,13 +364,28 @@ public class ChatAgentPipeline {
                 throw new BizException(ConversationErrorCode.AGENT_FAILED);
             }
             answer.set(message.getTextContent());
+            return;
         }
+        // 保留未专门处理的 AgentScope 事件，确保前端不会因版本扩展而丢失执行轨迹。
+        sendEvent(emitter, SseEventEnum.AGENT_EVENT, eventPayload(conversationId,
+                "type", agentEvent.getType().getValue(), "eventId", agentEvent.getId(),
+                "source", agentEvent.getSource(), "metadata", agentEvent.getMetadata()));
+    }
+
+    /** 构造允许空值的 SSE 事件数据，避免 AgentScope 可选字段导致 Map.of 抛出异常。 */
+    private Map<String, Object> eventPayload(Long conversationId, Object... fields) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("conversationId", conversationId);
+        for (int index = 0; index < fields.length; index += 2) {
+            payload.put((String) fields[index], fields[index + 1]);
+        }
+        return payload;
     }
 
     /** 处理智能体流正常结束，持久化 assistant 回复并发送完成事件。 */
     private void handleComplete(SseEmitter emitter, ConversationCoordinator.Lease lease,
                                 AtomicBoolean terminal, Long conversationId, Long userId,
-                                String traceId, String answer, boolean waitingForUser) {
+                                String answer, boolean waitingForUser) {
         if (!terminal.compareAndSet(false, true)) {
             return;
         }
@@ -282,8 +398,8 @@ public class ChatAgentPipeline {
                 throw new BizException(ConversationErrorCode.AGENT_FAILED);
             }
             MessageVO reply = append(userId, conversationId, MessageRole.ASSISTANT,
-                    answer, modelName(), traceId);
-            sendEvent(emitter, "complete", Map.of("conversationId", conversationId,
+                    answer, modelName());
+            sendEvent(emitter, SseEventEnum.COMPLETE, Map.of("conversationId", conversationId,
                     "messageId", reply.getId(), "message", reply));
             emitter.complete();
         } catch (Exception ex) {
@@ -325,7 +441,7 @@ public class ChatAgentPipeline {
     /** 向前端发送统一的智能体失败事件，忽略已断开的客户端连接。 */
     private void sendError(SseEmitter emitter) {
         try {
-            sendEvent(emitter, "error", Response.fail(ConversationErrorCode.AGENT_FAILED));
+            sendEvent(emitter, SseEventEnum.ERROR, Response.fail(ConversationErrorCode.AGENT_FAILED));
         } catch (RuntimeException ignored) {
             // 客户端连接已断开时无法继续发送错误事件。
         }
@@ -338,7 +454,7 @@ public class ChatAgentPipeline {
 
     /** 在同一个事务中保存消息并更新所属会话的活动字段。 */
     private MessageVO append(Long userId, Long conversationId, MessageRole role, String content,
-                             String modelName, String traceId) {
+                             String modelName) {
         return transactions.execute(tx -> {
             ConversationEntity conversation = conversationMapper.lockOwned(userId, conversationId);
             if (conversation == null) {
@@ -356,7 +472,7 @@ public class ChatAgentPipeline {
             entity.setModelName(modelName);
             entity.setCreatedBy(userId);
             if (messageMapper.insert(entity) != 1
-                    || conversationMapper.appended(userId, conversationId, traceId) != 1) {
+                    || conversationMapper.appended(userId, conversationId) != 1) {
                 throw new IllegalStateException("Message persistence failed");
             }
             MessageEntity saved = messageMapper.lockOwned(userId, conversationId, entity.getId());
@@ -367,11 +483,7 @@ public class ChatAgentPipeline {
     }
 
     /** 发送一个命名服务端事件，并将传输异常交给订阅错误处理。 */
-    private void sendEvent(SseEmitter emitter, String name, Object value) {
-        try {
-            emitter.send(SseEmitter.event().name(name).data(value));
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
+    private void sendEvent(SseEmitter emitter, SseEventEnum event, Object value) {
+        SseEmitterSender.send(emitter, event, value);
     }
 }

@@ -122,7 +122,7 @@ class ConversationIntegrationTest {
         return mvc.perform(asyncDispatch(started)).andReturn().getResponse().getContentAsString();
     }
     private long append(MessageRole role, String content) {
-        return service.append(userId, conversationId, role, content, null, null).getId();
+        return service.append(userId, conversationId, role, content, null).getId();
     }
     private void oldTime() {
         jdbc.update("UPDATE t_conversation SET update_time='2020-01-01 00:00:00' WHERE id=?", conversationId);
@@ -331,7 +331,7 @@ class ConversationIntegrationTest {
 
     @Test void appendRollsBackAfterMessageInsertOrCounterUpdate() {
         var before = service.detail(userId, conversationId);
-        doThrow(new IllegalStateException("simulated counter failure")).when(conversationMapper).appended(eq(userId), eq(conversationId), nullable(String.class));
+        doThrow(new IllegalStateException("simulated counter failure")).when(conversationMapper).appended(eq(userId), eq(conversationId));
         assertThatThrownBy(() -> append(MessageRole.USER, "rollback")).isInstanceOf(IllegalStateException.class);
         assertThat(service.detail(userId, conversationId)).isEqualTo(before);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM t_message WHERE conversation_id=?", Long.class, conversationId)).isZero();
@@ -391,7 +391,7 @@ class ConversationIntegrationTest {
     @Test void assistantPersistenceFailureNeverEmitsComplete() throws Exception {
         doAnswer(invocation -> {
             doThrow(new IllegalStateException("simulated persistence failure")).when(conversationMapper)
-                    .appended(eq(userId), eq(conversationId), nullable(String.class));
+                    .appended(eq(userId), eq(conversationId));
             return Flux.just(new AgentResultEvent(new AssistantMessage("answer")));
         }).when(agent).streamEvents(any(UserMessage.class), any(RuntimeContext.class));
         assertThat(finish(start("hello"))).contains("event:error").doesNotContain("event:complete");

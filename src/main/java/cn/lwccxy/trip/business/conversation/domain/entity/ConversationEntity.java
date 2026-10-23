@@ -16,7 +16,6 @@ public class ConversationEntity {
     private String status;
     private String runtimeSessionId;
     private Integer messageCount;
-    private String traceId;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }
