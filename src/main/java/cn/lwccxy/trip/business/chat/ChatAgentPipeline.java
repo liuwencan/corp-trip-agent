@@ -38,6 +38,7 @@ import reactor.core.scheduler.Schedulers;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
@@ -67,20 +68,68 @@ public class ChatAgentPipeline {
         SseEmitter emitter = new SseEmitter(240_000L);
         sseEmitterRegistry.register(conversationId.toString(), emitter);
         // 构建运行时上下文并沿用会话已有的 AgentScope session。
+
+        String traceId = UUID.randomUUID().toString();
         RuntimeContext runtimeContext = RuntimeContext.builder().userId(userId.toString())
-                .sessionId(conversationId.toString()).build();
+                .sessionId(conversationId.toString())
+                .put("traceId", traceId).build();
+
+
+        StringBuilder answer = new StringBuilder();
+        AtomicBoolean receivedFinalResult = new AtomicBoolean();
+        AtomicBoolean terminal = new AtomicBoolean();
 
         // 主智能体
         ReActAgent masterAgent = SpringContextUtil.getBean("masterAgent", ReActAgent.class);
         Flux<AgentEvent> agentEventFlux = masterAgent.streamEvents(List.of(new UserMessage(question)), runtimeContext);
         agentEventFlux.subscribe(event -> {
-            if(event instanceof TextBlockDeltaEvent){
-                SseEmitterSender.send(emitter, SseEventEnum.DELTA, ((TextBlockDeltaEvent) event).getDelta());
+            if (terminal.get()) {
+                return;
             }
-        },
-                throwable -> {
-                    log.error(throwable.getMessage());
-                });
+
+            if (event instanceof TextBlockDeltaEvent textEvent) {
+                // 按模型返回顺序拼接文本增量，使流结束后可以得到完整回答。
+                String delta = textEvent.getDelta();
+                if (delta != null) {
+                    answer.append(delta);
+                }
+                SseEmitterSender.send(emitter, SseEventEnum.DELTA, delta);
+            } else if (event instanceof AgentResultEvent resultEvent) {
+                Msg result = resultEvent.getResult();
+                GenerateReason reason = result == null ? null : result.getGenerateReason();
+
+                if(reason == GenerateReason.TOOL_SUSPENDED){
+                    // ASK_USER工具处理, 工具内部抛出了异常
+                    ToolResultMessage toolResult = (ToolResultMessage) result;
+                    log.info(toolResult.toString());
+                }
+
+                if (result == null || result.getRole() != MsgRole.ASSISTANT
+                        || (reason != null && reason != GenerateReason.MODEL_STOP
+                        && reason != GenerateReason.STRUCTURED_OUTPUT)) {
+                    if (terminal.compareAndSet(false, true)) {
+                        sendError(emitter);
+                        emitter.complete();
+                    }
+                    return;
+                }
+
+                // 最终消息覆盖可能包含中间轮次内容的增量缓存，作为持久化正文的权威结果。
+                String resultText = result.getTextContent();
+                log.info("本轮对话完毕, Agent最终输出的结果是： {}", resultText);
+
+                // 仅在收到合法的最终 assistant 结果后落库并发送完成事件。
+                append(userId, conversationId, MessageRole.ASSISTANT, resultText, modelName());
+                sendEvent(emitter, SseEventEnum.COMPLETE, Map.of("conversationId", conversationId));
+                emitter.complete();
+            }
+        }, throwable -> {
+            log.warn("[ChatAgentPipeline] Agent conversation {} failed", conversationId, throwable);
+            if (terminal.compareAndSet(false, true)) {
+                sendError(emitter);
+                emitter.complete();
+            }
+        });
 
         return emitter;
     }
@@ -127,14 +176,6 @@ public class ChatAgentPipeline {
             // 构建运行时上下文并沿用会话已有的 AgentScope session。
             RuntimeContext runtimeContext = RuntimeContext.builder().userId(userId.toString())
                     .sessionId(conversation.getRuntimeSessionId()).build();
-            // 中间件使用此回调发送 ask_user 工具参数，等待当前会话继续操作。
-            runtimeContext.put(HumanInTheLoopMiddleware.ASK_USER_CALLBACK_KEY,
-                    (java.util.function.Consumer<ToolUseBlock>) tool -> {
-                        waitingForUser.set(true);
-                        sendEvent(emitter, SseEventEnum.ASK, Map.of("conversationId", conversationId,
-                                "toolCallId", tool.getId(), "input", tool.getInput(),
-                                "delta", tool.getInput()));
-                    });
 
             // 主智能体
             ReActAgent masterAgent = SpringContextUtil.getBean("masterAgent", ReActAgent.class);
@@ -289,60 +330,8 @@ public class ChatAgentPipeline {
                     "replyId", event.getReplyId(), "blockId", event.getBlockId()));
             return;
         }
-        if (agentEvent instanceof ToolCallStartEvent event) {
-            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "calling",
-                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName()));
-            return;
-        }
-        if (agentEvent instanceof ToolCallDeltaEvent event) {
-            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "input",
-                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName(),
-                    "delta", event.getDelta()));
-            return;
-        }
-        if (agentEvent instanceof ToolCallEndEvent event) {
-            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "input_complete",
-                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName()));
-            return;
-        }
-        if (agentEvent instanceof ToolResultStartEvent event) {
-            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "executing",
-                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName()));
-            return;
-        }
-        if (agentEvent instanceof ToolResultTextDeltaEvent event) {
-            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "result_delta",
-                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName(),
-                    "delta", event.getDelta()));
-            return;
-        }
-        if (agentEvent instanceof ToolResultDataDeltaEvent event) {
-            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "result_data",
-                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName(),
-                    "data", event.getData()));
-            return;
-        }
-        if (agentEvent instanceof ToolResultEndEvent event) {
-            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "completed",
-                    "toolCallId", event.getToolCallId(), "toolName", event.getToolCallName(),
-                    "state", event.getState()));
-            return;
-        }
-        if (agentEvent instanceof TextBlockDeltaEvent event) {
-            sendEvent(emitter, SseEventEnum.DELTA, eventPayload(conversationId, "delta", event.getDelta(),
-                    "replyId", event.getReplyId(), "blockId", event.getBlockId()));
-            return;
-        }
-        if (agentEvent instanceof RequireUserConfirmEvent event) {
-            sendEvent(emitter, SseEventEnum.CONFIRM, eventPayload(conversationId,
-                    "toolCalls", event.getToolCalls()));
-            return;
-        }
-        if (agentEvent instanceof RequireExternalExecutionEvent event) {
-            sendEvent(emitter, SseEventEnum.TOOL, eventPayload(conversationId, "phase", "external_execution_required",
-                    "toolCalls", event.getToolCalls()));
-            return;
-        }
+
+
         if (agentEvent instanceof AgentResultEvent event) {
             Msg message = event.getResult();
             if (message == null) {
