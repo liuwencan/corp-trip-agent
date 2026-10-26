@@ -19,7 +19,7 @@
 
     <properties>
         <java.version>21</java.version>
-        <agentscope.version>2.0.0</agentscope.version>
+        <agentscope.version>1.0.12</agentscope.version>
         <mybatis-plus.version>3.5.9</mybatis-plus.version>
         <druid.version>1.2.23</druid.version>
         <fastjson.version>2.0.43</fastjson.version>
@@ -56,28 +56,44 @@
         </dependency>
 
         <!-- 阿里百炼dashscope模型 -->
-        <dependency>
-            <groupId>io.agentscope</groupId>
-            <artifactId>agentscope-extensions-model-dashscope</artifactId>
-            <version>${agentscope.version}</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>io.agentscope</groupId>-->
+<!--            <artifactId>agentscope-extensions-model-dashscope</artifactId>-->
+<!--            <version>${agentscope.version}</version>-->
+<!--        </dependency>-->
+
+<!--        <dependency>-->
+<!--            <groupId>io.agentscope</groupId>-->
+<!--            <artifactId>agentscope-dashscope-spring-boot-starter</artifactId>-->
+<!--            <version>${agentscope.version}</version>-->
+<!--        </dependency>-->
 
         <dependency>
-            <groupId>io.agentscope</groupId>
-            <artifactId>agentscope-dashscope-spring-boot-starter</artifactId>
-            <version>${agentscope.version}</version>
+            <groupId>com.alibaba</groupId>
+            <artifactId>dashscope-sdk-java</artifactId>
+            <version>2.22.9</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-simple</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.projectlombok</groupId>
+                    <artifactId>lombok</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
             <groupId>io.agentscope</groupId>
             <artifactId>agentscope-spring-boot-starter</artifactId>
-            <version>2.0.0</version>
+            <version>1.0.12</version>
         </dependency>
 
         <dependency>
             <groupId>io.agentscope</groupId>
             <artifactId>agentscope-extensions-session-mysql</artifactId>
-            <version>2.0.0-RC1</version>
+            <version>1.0.12</version>
         </dependency>
 
         <!-- MyBatis-Plus -->

@@ -1,7 +1,5 @@
 package cn.lwccxy.trip.agent;
 
-import cn.lwccxy.trip.agent.middleware.HumanInTheLoopMiddleware;
-import cn.lwccxy.trip.agent.middleware.ToolExecuteStoreMiddleware;
 import cn.lwccxy.trip.agent.tools.AskUserTool;
 import cn.lwccxy.trip.agent.tools.UserInfoTools;
 import cn.lwccxy.trip.common.util.SpringContextUtil;
@@ -13,7 +11,7 @@ import io.agentscope.core.tool.mcp.McpClientWrapper;
 import io.agentscope.core.tool.subagent.SubAgentConfig;
 import io.agentscope.core.tool.subagent.SubAgentProvider;
 import io.agentscope.core.tool.subagent.SubAgentTool;
-import io.agentscope.extensions.mysql.state.MysqlAgentStateStore;
+
 import io.modelcontextprotocol.spec.McpSchema;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -32,19 +30,12 @@ import java.util.Map;
 public class MasterAgent {
     private final DataSource dataSource;
     private final Model model;
-    private final TripRequestAgent tripRequestAgent;
-    private final ItineraryPlanningAgent itineraryPlanningAgent;
-    private final ToolExecuteStoreMiddleware toolExecuteStoreMiddleware;
     private final ApplicationContext applicationContext;
 
     /** 创建主智能体配置。 */
-    public MasterAgent(DataSource dataSource, Model model, TripRequestAgent tripRequestAgent,
-                       ItineraryPlanningAgent itineraryPlanningAgent, ToolExecuteStoreMiddleware toolExecuteStoreMiddleware, ApplicationContext applicationContext) {
+    public MasterAgent(DataSource dataSource, Model model, ApplicationContext applicationContext) {
         this.dataSource = dataSource;
         this.model = model;
-        this.tripRequestAgent = tripRequestAgent;
-        this.itineraryPlanningAgent = itineraryPlanningAgent;
-        this.toolExecuteStoreMiddleware = toolExecuteStoreMiddleware;
         this.applicationContext = applicationContext;
     }
 
@@ -75,8 +66,8 @@ public class MasterAgent {
                 .model(model)
                 .sysPrompt("你是企业智能差旅助手主智能体。 负责子Agent的调度和编排，如果要查询用户信息,就调用infoagent即可")
                 .toolkit(toolkit)
-                .middleware(toolExecuteStoreMiddleware)
-                .stateStore(new MysqlAgentStateStore(dataSource, "corptrip", "agentscope_sessions", true)) // 上下文持久化组件
+//                .middleware(toolExecuteStoreMiddleware)
+//                .stateStore(new MysqlAgentStateStore(dataSource, "corptrip", "agentscope_sessions", true)) // 上下文持久化组件
                 .build();
     }
 }

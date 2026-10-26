@@ -1,8 +1,8 @@
 package cn.lwccxy.trip.agent.config;
 
+import io.agentscope.core.formatter.dashscope.DashScopeChatFormatter;
+import io.agentscope.core.model.DashScopeChatModel;
 import io.agentscope.core.model.Model;
-import io.agentscope.extensions.model.dashscope.DashScopeChatModel;
-import io.agentscope.extensions.model.dashscope.formatter.DashScopeChatFormatter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -28,7 +28,6 @@ public class CorpTripModelConfig {
                         .stream(true) // 是否流式输出
                         .formatter(new DashScopeChatFormatter())
                         .build();
-
         return model;
     }
 

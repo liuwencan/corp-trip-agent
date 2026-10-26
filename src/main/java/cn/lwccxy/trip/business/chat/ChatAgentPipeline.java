@@ -14,16 +14,15 @@ import cn.lwccxy.trip.business.conversation.service.ConversationService;
 import cn.lwccxy.trip.common.exception.BizException;
 import cn.lwccxy.trip.common.response.Response;
 import cn.lwccxy.trip.agent.enums.SseEventEnum;
-import cn.lwccxy.trip.agent.middleware.HumanInTheLoopMiddleware;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
 import cn.lwccxy.trip.agent.sse.SseEmitterSender;
 import cn.lwccxy.trip.common.util.SpringContextUtil;
 import io.agentscope.core.ReActAgent;
-import io.agentscope.core.agent.RuntimeContext;
-import io.agentscope.core.event.*;
+import io.agentscope.core.agent.Event;
+import io.agentscope.core.agent.EventType;
+import io.agentscope.core.agent.StreamOptions;
 import io.agentscope.core.message.*;
 import io.agentscope.core.model.Model;
-import io.agentscope.core.state.AgentState;
 import io.agentscope.core.tool.ToolResultMessageBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -70,10 +69,6 @@ public class ChatAgentPipeline {
         // 构建运行时上下文并沿用会话已有的 AgentScope session。
 
         String traceId = UUID.randomUUID().toString();
-        RuntimeContext runtimeContext = RuntimeContext.builder().userId(userId.toString())
-                .sessionId(conversationId.toString())
-                .put("traceId", traceId).build();
-
 
         StringBuilder answer = new StringBuilder();
         AtomicBoolean receivedFinalResult = new AtomicBoolean();
@@ -81,27 +76,31 @@ public class ChatAgentPipeline {
 
         // 主智能体
         ReActAgent masterAgent = SpringContextUtil.getBean("masterAgent", ReActAgent.class);
-        Flux<AgentEvent> agentEventFlux = masterAgent.streamEvents(List.of(new UserMessage(question)), runtimeContext);
-        agentEventFlux.subscribe(event -> {
+
+        // 用户发送的消息
+        Msg userMsg = Msg.builder()
+                .role(MsgRole.USER)
+                .textContent(question)
+                .build();
+
+        Flux<Event> events = masterAgent.stream(List.of(userMsg), StreamOptions.defaults());
+        events.subscribe(event -> {
             if (terminal.get()) {
                 return;
             }
-
-            if (event instanceof TextBlockDeltaEvent textEvent) {
-                // 按模型返回顺序拼接文本增量，使流结束后可以得到完整回答。
-                String delta = textEvent.getDelta();
+            // 推理事件
+            if(event.getType() == EventType.REASONING){
+                String delta = event.getMessage().getTextContent();
                 if (delta != null) {
                     answer.append(delta);
                 }
                 SseEmitterSender.send(emitter, SseEventEnum.DELTA, delta);
-            } else if (event instanceof AgentResultEvent resultEvent) {
-                Msg result = resultEvent.getResult();
+            } else if (event.getType() == EventType.AGENT_RESULT) {
+                Msg result = event.getMessage();
                 GenerateReason reason = result == null ? null : result.getGenerateReason();
 
                 if(reason == GenerateReason.TOOL_SUSPENDED){
                     // ASK_USER工具处理, 工具内部抛出了异常
-                    ToolResultMessage toolResult = (ToolResultMessage) result;
-                    log.info(toolResult.toString());
                 }
 
                 if (result == null || result.getRole() != MsgRole.ASSISTANT
@@ -134,130 +133,6 @@ public class ChatAgentPipeline {
         return emitter;
     }
 
-    /** 将用户对澄清问题的回答作为工具结果提交，并恢复指定的智能体会话。 */
-    public SseEmitter resume(Long userId, Long conversationId, String toolCallId, String answer) {
-        validateQuestion(answer);
-        if (conversationId == null || conversationId <= 0 || toolCallId == null || toolCallId.isBlank()) {
-            throw new BizException(ConversationErrorCode.INVALID_PARAMETER);
-        }
-        ConversationEntity conversation = conversations.owned(userId, conversationId);
-
-        return executeStream(userId, conversation, answer,
-                (agent, runtimeContext) -> resumeAgent(agent, runtimeContext, toolCallId, answer));
-    }
-
-    /** 持久化当前消息并启动一次 AgentScope 流式执行。 */
-    private SseEmitter executeStream(Long userId, ConversationEntity conversation, String question,
-                                     BiFunction<ReActAgent, RuntimeContext, Flux<AgentEvent>> streamFactory) {
-        Long conversationId = conversation.getId();
-        String sessionId = conversation.getRuntimeSessionId();
-        ConversationCoordinator.Lease lease = coordinator.acquire(conversationId, true);
-        AtomicBoolean terminal = new AtomicBoolean();
-        AtomicBoolean waitingForUser = new AtomicBoolean();
-        AtomicReference<Disposable> subscription = new AtomicReference<>();
-        AtomicReference<String> answer = new AtomicReference<>();
-        SseEmitter emitter = new SseEmitter(240_000L);
-
-        try {
-            // 保存本轮输入并登记会话连接，使新消息与恢复消息共用相同的生命周期管理。
-            MessageVO userMessage = question == null ? null : append(userId, conversationId,
-                    MessageRole.USER, question, null);
-            sseEmitterRegistry.register(sessionId, emitter);
-            emitter.onTimeout(() -> cancel(lease, terminal, subscription));
-            emitter.onError(error -> cancel(lease, terminal, subscription));
-            emitter.onCompletion(() -> cancel(lease, terminal, subscription));
-            if (userMessage == null) {
-                sendEvent(emitter, SseEventEnum.INIT, Map.of("conversationId", conversationId));
-            } else {
-                sendEvent(emitter, SseEventEnum.INIT, Map.of("conversationId", conversationId,
-                        "messageId", userMessage.getId()));
-            }
-
-            // 构建运行时上下文并沿用会话已有的 AgentScope session。
-            RuntimeContext runtimeContext = RuntimeContext.builder().userId(userId.toString())
-                    .sessionId(conversation.getRuntimeSessionId()).build();
-
-            // 主智能体
-            ReActAgent masterAgent = SpringContextUtil.getBean("masterAgent", ReActAgent.class);
-
-            Disposable active = Flux.using(
-                            () -> masterAgent,
-                            agent -> streamFactory.apply(agent, runtimeContext),
-                            ReActAgent::close)
-                    .subscribeOn(Schedulers.boundedElastic())
-                    // 将事件增量推送给前端，并收集最终回复及人工澄清状态。
-                    .doOnNext(event -> handleEvent(emitter, conversationId, answer, waitingForUser, event))
-                    .doOnError(error -> handleError(emitter, lease, terminal, conversationId, error))
-                    .onErrorComplete()
-                    .doOnComplete(() -> handleComplete(emitter, lease, terminal, conversationId,
-                            userId, answer.get(), waitingForUser.get()))
-                    .subscribe();
-            subscription.set(active);
-            if (terminal.get()) {
-                active.dispose();
-            }
-        } catch (RuntimeException ex) {
-            lease.close();
-            throw ex;
-        }
-
-        return emitter;
-    }
-
-    /** 根据持久化的工具调用构造成功结果，交给 AgentScope 恢复挂起的智能体。 */
-    private Flux<AgentEvent> resumeAgent(ReActAgent agent, RuntimeContext runtimeContext,
-                                         String toolCallId, String answer) {
-        // 从数据库恢复当前会话，确保恢复请求只能对应仍处于挂起状态的 ask_user 调用。
-        AgentState state = agent.getAgentState(runtimeContext);
-        if (state == null || state.getContext() == null) {
-            throw new BizException(ConversationErrorCode.RESOURCE_NOT_FOUND);
-        }
-        ToolUseBlock toolCall = state.getContext().stream()
-                .flatMap(message -> message.getContentBlocks(ToolUseBlock.class).stream())
-                .filter(tool -> toolCallId.equals(tool.getId()))
-                .reduce((first, second) -> second)
-                .orElseThrow(() -> new BizException(ConversationErrorCode.RESOURCE_NOT_FOUND));
-        boolean alreadyAnswered = state.getContext().stream()
-                .flatMap(message -> message.getContentBlocks(ToolResultBlock.class).stream())
-                .anyMatch(result -> toolCallId.equals(result.getId()) && !result.isSuspended());
-        if (!"ask_user".equals(toolCall.getName()) || alreadyAnswered) {
-            throw new BizException(ConversationErrorCode.INVALID_PARAMETER);
-        }
-
-        // 使用 AgentScope 消息构造器关联工具调用与结果，使模型从挂起点继续推理。
-        ToolResultBlock toolResult = ToolResultBlock.text(answer)
-                .withIdAndName(toolCall.getId(), toolCall.getName())
-                .withState(ToolResultState.SUCCESS);
-        Msg toolResultMessage = ToolResultMessageBuilder.buildToolResultMsg(
-                toolResult, toolCall, agent.getName());
-        // 直接更新同一个 AgentState，兼容 AgentScope 2.0.0 对挂起工具结果的恢复判断。
-        replaceSuspendedToolResult(state, toolResult, toolResultMessage);
-        agent.saveAgentState(runtimeContext);
-        return agent.streamEvents(List.of(), runtimeContext);
-    }
-
-    /** 在持久化上下文中替换挂起的工具结果，缺少结果时追加一条工具消息。 */
-    private void replaceSuspendedToolResult(AgentState state, ToolResultBlock replacement,
-                                            Msg replacementMessage) {
-        List<Msg> context = state.contextMutable();
-        for (int messageIndex = context.size() - 1; messageIndex >= 0; messageIndex--) {
-            Msg message = context.get(messageIndex);
-            List<ContentBlock> blocks = message.getContent();
-            for (int blockIndex = 0; blockIndex < blocks.size(); blockIndex++) {
-                ContentBlock block = blocks.get(blockIndex);
-                if (block instanceof ToolResultBlock result
-                        && replacement.getId().equals(result.getId()) && result.isSuspended()) {
-                    // 保留原消息的角色和元数据，只替换挂起状态的工具结果内容。
-                    List<ContentBlock> updatedBlocks = new java.util.ArrayList<>(blocks);
-                    updatedBlocks.set(blockIndex, replacement);
-                    context.set(messageIndex, message.withContent(updatedBlocks));
-                    return;
-                }
-            }
-        }
-        // 某些 AgentScope 版本不会把挂起结果写入状态库，此时补充完整的工具结果消息。
-        context.add(replacementMessage);
-    }
 
     /** 校验会话归属；不存在时根据首个问题创建新的活动会话。 */
     private ConversationEntity ensureConversation(Long userId, Long conversationId, String question) {
@@ -291,74 +166,6 @@ public class ChatAgentPipeline {
         if (question == null || question.isBlank() || question.length() > 20000) {
             throw new BizException(ConversationErrorCode.INVALID_PARAMETER);
         }
-    }
-
-    /** 将智能体增量事件推送给前端，并保存最终 assistant 回复。 */
-    private void handleEvent(SseEmitter emitter, Long conversationId, AtomicReference<String> answer,
-                             AtomicBoolean waitingForUser, AgentEvent agentEvent) {
-        if (agentEvent instanceof AgentStartEvent event) {
-            sendEvent(emitter, SseEventEnum.STATUS, eventPayload(conversationId, "status", "EXECUTING",
-                    "agentName", event.getName(), "message", "Agent开始执行"));
-            return;
-        }
-        if (agentEvent instanceof AgentEndEvent) {
-            sendEvent(emitter, SseEventEnum.STATUS, eventPayload(conversationId, "status", "AGENT_FINISHED"));
-            return;
-        }
-        if (agentEvent instanceof ModelCallStartEvent event) {
-            sendEvent(emitter, SseEventEnum.STATUS, eventPayload(conversationId, "status", "THINKING",
-                    "replyId", event.getReplyId()));
-            return;
-        }
-        if (agentEvent instanceof ModelCallEndEvent event) {
-            sendEvent(emitter, SseEventEnum.STATUS, eventPayload(conversationId, "status", "MODEL_FINISHED",
-                    "replyId", event.getReplyId(), "usage", event.getUsage()));
-            return;
-        }
-        if (agentEvent instanceof ThinkingBlockStartEvent event) {
-            sendEvent(emitter, SseEventEnum.THINKING, eventPayload(conversationId, "phase", "start",
-                    "replyId", event.getReplyId(), "blockId", event.getBlockId()));
-            return;
-        }
-        if (agentEvent instanceof ThinkingBlockDeltaEvent event) {
-            sendEvent(emitter, SseEventEnum.THINKING, eventPayload(conversationId, "phase", "delta",
-                    "replyId", event.getReplyId(), "blockId", event.getBlockId(), "delta", event.getDelta()));
-            return;
-        }
-        if (agentEvent instanceof ThinkingBlockEndEvent event) {
-            sendEvent(emitter, SseEventEnum.THINKING, eventPayload(conversationId, "phase", "end",
-                    "replyId", event.getReplyId(), "blockId", event.getBlockId()));
-            return;
-        }
-
-
-        if (agentEvent instanceof AgentResultEvent event) {
-            Msg message = event.getResult();
-            if (message == null) {
-                throw new BizException(ConversationErrorCode.AGENT_FAILED);
-            }
-            GenerateReason reason = message.getGenerateReason();
-            if (reason == GenerateReason.TOOL_SUSPENDED) {
-                // ask 事件已提供澄清内容，本轮应等待用户提交答案后再继续执行。
-                waitingForUser.set(true);
-                return;
-            }
-            for (ThinkingBlock thinking : message.getContentBlocks(ThinkingBlock.class)) {
-                sendEvent(emitter, SseEventEnum.THINKING, eventPayload(conversationId, "phase", "complete",
-                        "thinking", thinking.getThinking(), "metadata", thinking.getMetadata()));
-            }
-            if (message.getRole() != MsgRole.ASSISTANT
-                    || (reason != null && reason != GenerateReason.MODEL_STOP
-                    && reason != GenerateReason.STRUCTURED_OUTPUT)) {
-                throw new BizException(ConversationErrorCode.AGENT_FAILED);
-            }
-            answer.set(message.getTextContent());
-            return;
-        }
-        // 保留未专门处理的 AgentScope 事件，确保前端不会因版本扩展而丢失执行轨迹。
-        sendEvent(emitter, SseEventEnum.AGENT_EVENT, eventPayload(conversationId,
-                "type", agentEvent.getType().getValue(), "eventId", agentEvent.getId(),
-                "source", agentEvent.getSource(), "metadata", agentEvent.getMetadata()));
     }
 
     /** 构造允许空值的 SSE 事件数据，避免 AgentScope 可选字段导致 Map.of 抛出异常。 */
