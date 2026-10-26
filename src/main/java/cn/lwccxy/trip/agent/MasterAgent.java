@@ -55,6 +55,7 @@ public class MasterAgent {
                 .description("负责查询天气、目的地资讯、用户信息、当地交通和餐饮等通用信息")              // 自定义描述
                 .forwardEvents(true)                       // 转发子智能体事件
                 .build();
+
         toolkit.registerAgentTool(new SubAgentTool((SubAgentProvider<ReActAgent>) generalInfoAgent, config));
 
         toolkit.registerTool(new AskUserTool());
@@ -66,8 +67,6 @@ public class MasterAgent {
                 .model(model)
                 .sysPrompt("你是企业智能差旅助手主智能体。 负责子Agent的调度和编排，如果要查询用户信息,就调用infoagent即可")
                 .toolkit(toolkit)
-//                .middleware(toolExecuteStoreMiddleware)
-//                .stateStore(new MysqlAgentStateStore(dataSource, "corptrip", "agentscope_sessions", true)) // 上下文持久化组件
                 .build();
     }
 }

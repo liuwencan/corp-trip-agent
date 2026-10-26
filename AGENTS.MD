@@ -25,8 +25,10 @@ CorpTripAgent 是一个企业内部智能出差助手后端项目，当前为单
 - Druid 1.2.23 数据库连接池
 - Fastjson2 2.0.43
 - Lombok 1.18.30
-- AgentScope Harness 2.0.3
+- AgentScope 1.0.12
 - Maven
+
+AgentScope 版本约束：项目当前统一使用 AgentScope 1.0.12，后续开发、依赖引入和 API 调用均必须以 1.0.12 版本实际提供的能力为准，不得按其他版本的文档或示例直接实现。
 
 应用入口：`cn.lwccxy.trip.CorpTripApplication`
 
