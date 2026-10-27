@@ -22,9 +22,9 @@ public class ChatController {
         return pipeline.execute(currentUser.get().getId(), form.getConversationId(), form.getQuestion());
     }
 
-//    /** 接收用户对智能体澄清问题的回答，并恢复同一会话的流式对话。 */
-//    @PostMapping(value = "/resume", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-//    public SseEmitter resume(@Valid @RequestBody ChatResumeForm form) {
-//        return pipeline.(currentUser.get().getId(), form.getConversationId(), form.getToolCallId(), form.getAnswer());
-//    }
+    /** 接收用户对智能体澄清问题的回答，并恢复同一会话的流式对话。 */
+    @PostMapping(value = "/resume", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter resume(@Valid @RequestBody ChatResumeForm form) {
+        return pipeline.resume(currentUser.get().getId(), form.getConversationId(), form.getToolCallId(), form.getAnswer());
+    }
 }
