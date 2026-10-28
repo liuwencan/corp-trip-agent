@@ -3,6 +3,8 @@ package cn.lwccxy.trip.business.chat;
 import cn.lwccxy.trip.agent.MasterAgent;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
+import cn.lwccxy.trip.agent.enums.ModelPricingEnum;
+import cn.lwccxy.trip.agent.utils.ModelTokenBillingUtil;
 import cn.lwccxy.trip.business.conversation.domain.entity.ConversationEntity;
 import cn.lwccxy.trip.business.conversation.domain.entity.MessageEntity;
 import cn.lwccxy.trip.business.conversation.domain.form.CreateConversationForm;
@@ -26,6 +28,7 @@ import io.agentscope.core.agent.EventType;
 import io.agentscope.core.agent.StreamOptions;
 import io.agentscope.core.message.*;
 import io.agentscope.core.model.ChatResponse;
+import io.agentscope.core.model.ChatUsage;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
 import jakarta.validation.constraints.NotBlank;
@@ -44,10 +47,8 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.util.context.Context;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.math.BigDecimal;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -189,8 +190,8 @@ public class ChatAgentPipeline {
     /** 使用轻量级模型异步生成会话标题，并仅在标题仍为默认值时回写。 */
     private void asyncUpdateConversationTitle(Long userId, Long conversationId, String question, String expectedTitle) {
         // 标题生成放到后台任务执行，避免模型响应时间影响本轮对话的请求建立。
-        Thread.ofVirtual().name("VirtualThread-updateConversationTitle").start(() -> {
-            long startNanos = System.nanoTime();          // 任务开始
+        Thread.ofVirtual().name("VirtualThread-updateTitle").start(() -> {
+            long startNanos = System.nanoTime();          // 任务开始计时
             try {
                 logger.info("[会话标题异步改写进行中] 会话ID：{}, 原始问题：{}", conversationId, question);
                 List<ChatResponse> responses = lightWeightModel.stream(List.of(
@@ -201,6 +202,7 @@ public class ChatAgentPipeline {
                                 List.of(), GenerateOptions.builder().stream(false).build())
                         .collectList()
                         .block();
+                // 改写后的会话标题获取
                 String title = responses == null ? null : responses.stream()
                         .flatMap(response -> response.getContent().stream())
                         .filter(TextBlock.class::isInstance)
@@ -209,6 +211,26 @@ public class ChatAgentPipeline {
                         .filter(text -> text != null && !text.isBlank())
                         .reduce("", String::concat)
                         .strip();
+                // 改写的Token消耗用量
+                ChatUsage usage = responses == null ? null : responses.stream()
+                        .map(ChatResponse::getUsage)
+                        .filter(Objects::nonNull)
+                        .reduce((first, next) -> next)
+                        .orElse(null);
+
+                if (usage != null) {
+
+                    // 费用计算
+                    BigDecimal cost = ModelTokenBillingUtil.calculateCost(usage.getInputTokens(), usage.getOutputTokens(), ModelPricingEnum.QWEN_3_8_FLASH);
+                    logger.info(
+                            "[会话标题模型用量] conversationId={}, model={}, inputTokens={}, outputTokens={}, totalTokens={}, modelTime={}s, 总花费={}元",
+                            conversationId,
+                            lightWeightModel.getModelName(),
+                            usage.getInputTokens(),
+                            usage.getOutputTokens(),
+                            usage.getTotalTokens(),
+                            usage.getTime(),cost);
+                }
                 if (title == null || title.isBlank()) {
                     return;
                 }
