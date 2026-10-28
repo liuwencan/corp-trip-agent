@@ -13,15 +13,9 @@ import lombok.Setter;
 @Setter
 public class ChatResumeForm extends ConversationRequestForm {
 
-    @NotNull
-    @Positive
     private Long conversationId;
 
-    @NotBlank
-    @Size(max = 128)
     private String toolCallId;
 
-    @NotBlank
-    @Size(max = 20000)
     private String answer;
 }

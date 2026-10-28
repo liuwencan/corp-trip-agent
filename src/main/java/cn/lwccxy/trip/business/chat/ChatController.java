@@ -24,7 +24,7 @@ public class ChatController {
 
     /** 接收用户对智能体澄清问题的回答，并恢复同一会话的流式对话。 */
     @PostMapping(value = "/resume", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter resume(@Valid @RequestBody ChatResumeForm form) {
+    public SseEmitter resume(@RequestBody ChatResumeForm form) {
         return pipeline.resume(currentUser.get().getId(), form.getConversationId(), form.getToolCallId(), form.getAnswer());
     }
 }

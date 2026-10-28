@@ -4,6 +4,9 @@ import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.enums.SseEventEnum;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
 import cn.lwccxy.trip.agent.sse.SseEmitterSender;
+import cn.lwccxy.trip.business.conversation.enums.MessageRole;
+import cn.lwccxy.trip.business.conversation.service.ConversationService;
+import cn.lwccxy.trip.common.util.JsonUtil;
 import io.agentscope.core.hook.Hook;
 import io.agentscope.core.hook.HookEvent;
 import io.agentscope.core.hook.PostActingEvent;
@@ -16,6 +19,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,17 +27,17 @@ import java.util.Optional;
 public class ConfirmationHook implements Hook {
     private final Logger logger = LoggerFactory.getLogger(ConfirmationHook.class);
     private final SseEmitterRegistry sseEmitterRegistry;
-    private final AgentRuntimeContext agentRuntimeContext;
+    private final ConversationService conversationService;
 
     /**
      * 创建确认 Hook。
      *
      * @param sseEmitterRegistry SSE 连接注册表
-     * @param agentRuntimeContext 当前 Agent 对应的运行时上下文
+     * @param conversationService 会话消息持久化服务
      */
-    public ConfirmationHook(SseEmitterRegistry sseEmitterRegistry, AgentRuntimeContext agentRuntimeContext) {
+    public ConfirmationHook(SseEmitterRegistry sseEmitterRegistry, ConversationService conversationService) {
         this.sseEmitterRegistry = sseEmitterRegistry;
-        this.agentRuntimeContext = agentRuntimeContext;
+        this.conversationService = conversationService;
     }
 
 
@@ -51,7 +55,7 @@ public class ConfirmationHook implements Hook {
         return Mono.deferContextual(contextView -> {
             // 优先从 Reactor Context 获取，未传入时使用 Agent 创建时保存的上下文
             AgentRuntimeContext runtimeContext =
-                    contextView.getOrDefault("agentRuntimeContext", agentRuntimeContext);
+                    contextView.getOrDefault("agentRuntimeContext", null);
 
             if (event instanceof PostReasoningEvent e) {
                 logger.info("ConfirmationHook开始执行");
@@ -68,18 +72,24 @@ public class ConfirmationHook implements Hook {
                         .findFirst();
 
                 if (askUserTool.isPresent()) {
+                    ToolUseBlock toolCall = askUserTool.get();
+                    Map<String, Object> input = toolCall.getInput();
+                    String toolCallId = toolCall.getId();
+                    // 将等待确认的工具调用写入会话历史，便于后续按时间顺序查询完整交互。
+                    Map<String, Object> persistedContent = new LinkedHashMap<>();
+                    persistedContent.put("toolCallId", toolCallId);
+                    persistedContent.put("input", input);
+                    Long userId = Long.valueOf(runtimeContext.getUserId());
+                    Long conversationId = Long.valueOf(sessionId);
+                    conversationService.append(userId, conversationId, MessageRole.TOOL,
+                            JsonUtil.toJson(persistedContent), null);
+
                     if (emitter != null) {
-                        Map<String, Object> input = askUserTool.get().getInput();
-                        String toolCallId = askUserTool.get().getId();
                         // 将工具调用标识和用户澄清参数一起发送，便于前端渲染并在恢复调用时关联原工具请求。
-                        Map<String, Object> askPayload = Map.of(
-                                "toolCallId", toolCallId,
-                                "input", input
-                        );
                         SseEmitterSender.send(
                                 emitter,
                                 SseEventEnum.ASK,
-                                askPayload
+                                persistedContent
                         );
                     }
                     e.stopAgent();

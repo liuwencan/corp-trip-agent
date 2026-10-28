@@ -72,7 +72,7 @@ public class GeneralInfoAgent {
 
         // 子智能体按工具调用所需任务独立响应，主智能体负责选择和组合它们的结果。
         Toolkit toolkit = new Toolkit();
-        toolkit.registerTool(new AskUserTool());
+//        toolkit.registerTool(new AskUserTool());
         toolkit.registerTool(new UserInfoTools());
 
         // 阿里云天气MCP接入
@@ -81,7 +81,7 @@ public class GeneralInfoAgent {
 
 
         return ReActAgent.builder()
-                .name("generalinfo_agent")
+                .name("GeneralInfoAgent")
                 .description("负责查询天气、目的地资讯、当地交通和餐饮等通用信息")
                 .model(model)
                 .sysPrompt("你是企业差旅通用信息子智能体。负责查询天气、目的地资讯、当地交通、餐饮和其他出行相关信息。回答时说明信息的时间范围和不确定性，只能使用已注册的查询工具，不得编造实时数据，不负责创建订单或修改差旅单。")

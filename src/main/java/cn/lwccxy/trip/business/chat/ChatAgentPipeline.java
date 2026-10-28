@@ -139,7 +139,10 @@ public class ChatAgentPipeline {
                 if (delta != null) {
                     answer.append(delta);
                 }
-                SseEmitterSender.send(emitter, SseEventEnum.DELTA, delta);
+
+                if(delta != null && !delta.isEmpty()){
+                    SseEmitterSender.send(emitter, SseEventEnum.DELTA, delta);
+                }
             } else if (event.getType() == EventType.AGENT_RESULT) {
                 Msg result = event.getMessage();
                 GenerateReason reason = result == null ? null : result.getGenerateReason();
@@ -422,7 +425,10 @@ public class ChatAgentPipeline {
                 if (delta != null) {
                     answer.append(delta);
                 }
-                SseEmitterSender.send(emitter, SseEventEnum.DELTA, delta);
+
+                if(delta != null && !delta.isEmpty()){
+                    SseEmitterSender.send(emitter, SseEventEnum.DELTA, delta);
+                }
             } else if (event.getType() == EventType.AGENT_RESULT) {
                 Msg result = event.getMessage();
                 GenerateReason reason = result == null ? null : result.getGenerateReason();

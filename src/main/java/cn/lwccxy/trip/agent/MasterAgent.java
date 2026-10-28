@@ -48,17 +48,19 @@ public class MasterAgent {
     private final ApplicationContext applicationContext;
     private final PersistSessionHook persistSessionHook;
     private final McpClientWrapper weatherMcpClient;
-
+    private final ConfirmationHook confirmationHook;
 
     /** 创建主智能体配置。 */
     public MasterAgent(DataSource dataSource, Model model, ApplicationContext applicationContext,
-                       SseEmitterRegistry sseEmitterRegistry, PersistSessionHook persistSessionHook, McpClientWrapper weatherMcpClient) {
+                       SseEmitterRegistry sseEmitterRegistry, PersistSessionHook persistSessionHook, McpClientWrapper weatherMcpClient
+    , ConfirmationHook confirmationHook) {
         this.dataSource = dataSource;
         this.model = model;
         this.applicationContext = applicationContext;
         this.sseEmitterRegistry = sseEmitterRegistry;
         this.persistSessionHook = persistSessionHook;
         this.weatherMcpClient = weatherMcpClient;
+        this.confirmationHook = confirmationHook;
     }
 
     /** 为每次对话创建隔离的主智能体及其差旅子智能体工具。 */
@@ -75,9 +77,9 @@ public class MasterAgent {
         ReActAgent generalInfoAgent = applicationContext.getBean("generalInfoAgent", ReActAgent.class);
 
         SubAgentConfig config = SubAgentConfig.builder()
-                .toolName("generalinfo_agent")                    // 自定义工具名称
+                .toolName("GeneralInfoAgent")                    // 自定义工具名称
                 .description("负责查询天气、目的地资讯、用户信息、当地交通和餐饮等通用信息")              // 自定义描述
-//                .forwardEvents(true)                       // 转发子智能体事件
+                .forwardEvents(false)                       // 不转发子智能体事件, 子智能体内部执行产生的事情对主智能体的HOOK不可见
                 .build();
 
         toolkit.registerAgentTool(
@@ -93,16 +95,16 @@ public class MasterAgent {
                 .register(agentRuntimeContext)
                 .build();
 
+        // AgentScope的六层上下文压缩机制
         AutoContextConfig autoContextConfig = AutoContextConfig.builder()
                 .build();
 
         // 每次创建 prototype Agent 都绑定独立 Hook，避免并发会话共享运行时上下文。
-        ConfirmationHook confirmationHook = new ConfirmationHook(sseEmitterRegistry, agentRuntimeContext);
         ReActAgent masterAgent = ReActAgent.builder()
                 .name("MasterAgent")
                 .description("负责理解企业差旅请求并协调差旅单、通用信息和行程规划子智能体")
                 .model(model)
-                .sysPrompt("你是企业智能差旅助手主智能体。 负责子Agent的调度和编排，当用户问查询天气相关的话，直接转发到infoagent去执行，不要在主智能体上调用ask_user工具, 如果要查询天气、用户信息,就调用infoagent即可")
+                .sysPrompt("你是企业智能差旅助手主智能体。 负责子Agent的调度和编排，目前有infoAgent，主要是查询通用信息的")
                 .toolkit(toolkit)
                 .toolExecutionContext(context)
                 .hooks(List.of(new AutoContextHook(), confirmationHook, persistSessionHook))
