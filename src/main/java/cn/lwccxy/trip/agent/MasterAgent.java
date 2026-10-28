@@ -104,7 +104,7 @@ public class MasterAgent {
                 .name("MasterAgent")
                 .description("负责理解企业差旅请求并协调差旅单、通用信息和行程规划子智能体")
                 .model(model)
-                .sysPrompt("你是企业智能差旅助手主智能体。 负责子Agent的调度和编排，目前有infoAgent，主要是查询通用信息的")
+                .sysPrompt("你是企业智能差旅助手主智能体。 负责子Agent的调度和编排,用户咨询政策相关的内容请直接调度infoAgent子智能体即可，目前有infoAgent，主要是查询通用信息的")
                 .toolkit(toolkit)
                 .toolExecutionContext(context)
                 .hooks(List.of(new AutoContextHook(), confirmationHook, persistSessionHook))

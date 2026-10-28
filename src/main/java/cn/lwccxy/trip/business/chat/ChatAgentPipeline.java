@@ -58,7 +58,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class ChatAgentPipeline {
     private final Logger logger = LoggerFactory.getLogger(ChatAgentPipeline.class);
-
+    private final Long SSE_TIMEOUT = 300_000L;
     private final ConversationService conversations;
     private final ConversationCoordinator coordinator;
     private final ConversationMapper conversationMapper;
@@ -95,7 +95,7 @@ public class ChatAgentPipeline {
         // 3. 问题持久化
         MessageVO userMessage = question == null ? null : append(userId, activeConversationId, MessageRole.USER, question, null);
         // 5. 注册SSE
-        SseEmitter emitter = new SseEmitter(240_000L);
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         sseEmitterRegistry.register(activeConversationId.toString(), emitter);
         // 构建运行时上下文并沿用会话已有的 AgentScope session。
         AgentRuntimeContext agentRuntimeContext = AgentRuntimeContext.build()
@@ -408,10 +408,9 @@ public class ChatAgentPipeline {
         AtomicBoolean receivedFinalResult = new AtomicBoolean();
         AtomicBoolean terminal = new AtomicBoolean();
 
-
         ReActAgent masterAgent = SpringContextUtil.getBean("masterAgent", ReActAgent.class);
 
-        SseEmitter emitter = new SseEmitter();
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         sseEmitterRegistry.register(conversationId.toString(), emitter);
 
         Flux<Event> events = masterAgent.stream(List.of(toolResultMsg));
