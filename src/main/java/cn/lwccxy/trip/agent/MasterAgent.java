@@ -75,16 +75,18 @@ public class MasterAgent {
         ReActAgent generalInfoAgent = applicationContext.getBean("generalInfoAgent", ReActAgent.class);
 
         SubAgentConfig config = SubAgentConfig.builder()
-                .toolName("GeneralInfoAgent")                    // 自定义工具名称
+                .toolName("generalinfo_agent")                    // 自定义工具名称
                 .description("负责查询天气、目的地资讯、用户信息、当地交通和餐饮等通用信息")              // 自定义描述
-                .forwardEvents(true)                       // 转发子智能体事件
+//                .forwardEvents(true)                       // 转发子智能体事件
                 .build();
 
-//        toolkit.registerAgentTool(new SubAgentTool((SubAgentProvider<ReActAgent>) generalInfoAgent, config));
+        toolkit.registerAgentTool(
+                new SubAgentTool(() -> generalInfoAgent, config)
+        );
         toolkit.registerTool(new AskUserTool());
         // 阿里云天气MCP接入
         // https://market.aliyun.com/detail/cmapi00074002?spm=5176.29867242_210807074.0.0.44e83e7eLgrp1C
-        toolkit.registerMcpClient(weatherMcpClient).block();
+//        toolkit.registerMcpClient(weatherMcpClient).block();
 
         // 工具执行上下文, 后续可以在该Agent的多个Hook机制中去取出这些参数
         ToolExecutionContext context = ToolExecutionContext.builder()
@@ -100,7 +102,7 @@ public class MasterAgent {
                 .name("MasterAgent")
                 .description("负责理解企业差旅请求并协调差旅单、通用信息和行程规划子智能体")
                 .model(model)
-                .sysPrompt("你是企业智能差旅助手主智能体。 负责子Agent的调度和编排，如果要查询用户信息,就调用infoagent即可")
+                .sysPrompt("你是企业智能差旅助手主智能体。 负责子Agent的调度和编排，当用户问查询天气相关的话，直接转发到infoagent去执行，不要在主智能体上调用ask_user工具, 如果要查询天气、用户信息,就调用infoagent即可")
                 .toolkit(toolkit)
                 .toolExecutionContext(context)
                 .hooks(List.of(new AutoContextHook(), confirmationHook, persistSessionHook))

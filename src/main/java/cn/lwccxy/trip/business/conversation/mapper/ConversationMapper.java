@@ -29,4 +29,10 @@ public interface ConversationMapper extends BaseMapper<ConversationEntity> {
             + "update_time=GREATEST(update_time,CURRENT_TIMESTAMP(6)) WHERE id=#{id} AND user_id=#{userId}")
     int change(@Param("userId") Long userId, @Param("id") Long id,
                @Param("title") String title, @Param("status") String status);
+
+    /** 仅当会话仍使用创建时的默认标题时回写模型生成的标题，避免覆盖用户的手动修改。 */
+    @Update("UPDATE t_conversation SET title=#{title}, update_time=GREATEST(update_time,CURRENT_TIMESTAMP(6)) "
+            + "WHERE id=#{id} AND user_id=#{userId} AND title=#{expectedTitle}")
+    int updateTitleIfUnchanged(@Param("userId") Long userId, @Param("id") Long id,
+                               @Param("expectedTitle") String expectedTitle, @Param("title") String title);
 }

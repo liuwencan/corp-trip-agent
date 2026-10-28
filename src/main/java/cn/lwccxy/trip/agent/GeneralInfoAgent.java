@@ -1,10 +1,13 @@
 package cn.lwccxy.trip.agent;
 
+import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
+import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.tools.AskUserTool;
 import cn.lwccxy.trip.agent.tools.UserInfoTools;
 import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.rag.Knowledge;
 import io.agentscope.core.rag.RAGMode;
+import io.agentscope.core.tool.ToolExecutionContext;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.mcp.McpClientBuilder;
 import io.agentscope.core.tool.mcp.McpClientWrapper;
@@ -13,6 +16,8 @@ import io.agentscope.core.tool.subagent.SubAgentTool;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.model.Model;
 import jakarta.annotation.PreDestroy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +30,9 @@ import java.time.Duration;
 
 @Configuration("generalInfoAgentConfiguration")
 public class GeneralInfoAgent {
+    private final Logger logger = LoggerFactory.getLogger(GeneralInfoAgent.class);
+
+
     private final DataSource dataSource;
     private final Model model;
     private ReActAgent agent;
@@ -55,6 +63,12 @@ public class GeneralInfoAgent {
     @Bean
     @Scope("prototype")
     public ReActAgent generalInfoAgent() {
+        AgentRuntimeContext agentRuntimeContext = AgentRuntimeContextHolder.get();
+        logger.info("[GeneralInfoAgent]正在构建中, userId: {}, sessionId: {}", agentRuntimeContext.getUserId(), agentRuntimeContext.getSessionId());
+
+        ToolExecutionContext context = ToolExecutionContext.builder()
+                .register(agentRuntimeContext)
+                .build();
 
         // 子智能体按工具调用所需任务独立响应，主智能体负责选择和组合它们的结果。
         Toolkit toolkit = new Toolkit();
@@ -67,7 +81,7 @@ public class GeneralInfoAgent {
 
 
         return ReActAgent.builder()
-                .name("GeneralInfoAgent")
+                .name("generalinfo_agent")
                 .description("负责查询天气、目的地资讯、当地交通和餐饮等通用信息")
                 .model(model)
                 .sysPrompt("你是企业差旅通用信息子智能体。负责查询天气、目的地资讯、当地交通、餐饮和其他出行相关信息。回答时说明信息的时间范围和不确定性，只能使用已注册的查询工具，不得编造实时数据，不负责创建订单或修改差旅单。")
@@ -79,6 +93,7 @@ public class GeneralInfoAgent {
                         .initialBackoff(Duration.ofSeconds(3))
                         .retryOn(error -> error instanceof java.io.IOException)
                         .build())
+                .toolExecutionContext(context)
                 // 启用 Generic RAG 模式
                 .knowledge(corptripGuidelinesKnowledge).knowledge(corptripPolicyKnowledge) // 添加 差旅政策/差旅指南 知识库d
                 .ragMode(RAGMode.AGENTIC)

@@ -37,5 +37,7 @@ public class GlobalExceptionHandler {
         HttpRequestMethodNotSupportedException.class})
     public ResponseEntity<Response<Void>> invalid(Exception ex) { return ResponseEntity.status(400).body(Response.fail(UserErrorCode.INVALID_PARAMETER)); }
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Response<Void>> unexpected(Exception ex) { return ResponseEntity.status(500).body(Response.fail("INTERNAL_ERROR", "Internal server error")); }
+    public ResponseEntity<Response<Void>> unexpected(Exception ex) {
+        return ResponseEntity.status(500).body(Response.fail("INTERNAL_ERROR", "Internal server error"));
+    }
 }
