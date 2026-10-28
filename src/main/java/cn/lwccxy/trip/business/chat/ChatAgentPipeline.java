@@ -25,16 +25,18 @@ import io.agentscope.core.agent.Event;
 import io.agentscope.core.agent.EventType;
 import io.agentscope.core.agent.StreamOptions;
 import io.agentscope.core.message.*;
+import io.agentscope.core.model.ChatResponse;
+import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -46,12 +48,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** 负责执行主智能体流式对话，并将事件推送给调用方。 */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class ChatAgentPipeline {
     private final Logger logger = LoggerFactory.getLogger(ChatAgentPipeline.class);
@@ -62,6 +64,22 @@ public class ChatAgentPipeline {
     private final MessageMapper messageMapper;
     private final TransactionTemplate transactions;
     private final SseEmitterRegistry sseEmitterRegistry;
+    private final Model lightWeightModel;
+
+    /** 构造会话流水线，并明确注入用于标题生成的轻量级模型。 */
+    public ChatAgentPipeline(ConversationService conversations, ConversationCoordinator coordinator,
+                             ConversationMapper conversationMapper, MessageMapper messageMapper,
+                             TransactionTemplate transactions, SseEmitterRegistry sseEmitterRegistry,
+                             @Qualifier("lightWeightModel") Model lightWeightModel) {
+        this.conversations = conversations;
+        this.coordinator = coordinator;
+        this.conversationMapper = conversationMapper;
+        this.messageMapper = messageMapper;
+        this.transactions = transactions;
+        this.sseEmitterRegistry = sseEmitterRegistry;
+        this.lightWeightModel = lightWeightModel;
+    }
+
 
     /** 为当前用户执行一次会话，先保存用户消息，再通过服务端事件推送智能体响应。 */
     public SseEmitter execute(Long userId, Long conversationId, String question) {
@@ -71,21 +89,23 @@ public class ChatAgentPipeline {
         validateQuestion(question);
         // 2. 会话创建
         ConversationEntity conversation = ensureConversation(userId, conversationId, question);
+        // 新建会话时请求参数中的 conversationId 仍为空，后续消息和 Agent session 必须使用数据库生成的 ID。
+        Long activeConversationId = conversation.getId();
         // 3. 问题持久化
-        MessageVO userMessage = question == null ? null : append(userId, conversationId,
-                MessageRole.USER, question, null);
-        // 4. 注册SSE
+        MessageVO userMessage = question == null ? null : append(userId, activeConversationId, MessageRole.USER, question, null);
+        // 5. 注册SSE
         SseEmitter emitter = new SseEmitter(240_000L);
-        sseEmitterRegistry.register(conversationId.toString(), emitter);
+        sseEmitterRegistry.register(activeConversationId.toString(), emitter);
         // 构建运行时上下文并沿用会话已有的 AgentScope session。
         AgentRuntimeContext agentRuntimeContext = AgentRuntimeContext.build()
-                .sessionId(conversationId.toString())
+                .sessionId(activeConversationId.toString())
                 .userId(userId.toString())
                 .builder();
         // 将Agent运行期间上下文放到ThreadLocal里面, 用于传递到Agent的构建中
         // 因为Agent是多例模式, 每次通过applicationContext.get()方法获取其实都是创建一个新的对象
         AgentRuntimeContextHolder.set(agentRuntimeContext);
 
+        // ============ 意图识别 =============
         String traceId = UUID.randomUUID().toString();
 
         StringBuilder answer = new StringBuilder();
@@ -146,12 +166,12 @@ public class ChatAgentPipeline {
                 log.info("本轮对话完毕, Agent最终输出的结果是： {}", resultText);
 
                 // 仅在收到合法的最终 assistant 结果后落库并发送完成事件。
-                append(userId, conversationId, MessageRole.ASSISTANT, resultText, modelName());
-                sendEvent(emitter, SseEventEnum.COMPLETE, Map.of("conversationId", conversationId));
+                append(userId, activeConversationId, MessageRole.ASSISTANT, resultText, modelName());
+                sendEvent(emitter, SseEventEnum.COMPLETE, Map.of("conversationId", activeConversationId));
                 emitter.complete();
             }
         }, throwable -> {
-            log.warn("[ChatAgentPipeline] Agent conversation {} failed", conversationId, throwable);
+            log.warn("[ChatAgentPipeline] Agent conversation {} failed", activeConversationId, throwable);
             if (terminal.compareAndSet(false, true)) {
                 sendError(emitter);
                 emitter.complete();
@@ -164,6 +184,46 @@ public class ChatAgentPipeline {
         }, Context.of("agentRuntimeContext", agentRuntimeContext));
 
         return emitter;
+    }
+
+    /** 使用轻量级模型异步生成会话标题，并仅在标题仍为默认值时回写。 */
+    private void asyncUpdateConversationTitle(Long userId, Long conversationId, String question, String expectedTitle) {
+        // 标题生成放到后台任务执行，避免模型响应时间影响本轮对话的请求建立。
+        CompletableFuture.runAsync(() -> {
+            try {
+                List<ChatResponse> responses = lightWeightModel.stream(List.of(
+                                Msg.builder().role(MsgRole.SYSTEM)
+                                        .textContent("请根据用户的问题生成简洁的中文会话标题，最多20个汉字。只返回标题文本，不加引号、序号或解释。")
+                                        .build(),
+                                Msg.builder().role(MsgRole.USER).textContent(question).build()),
+                        List.of(), GenerateOptions.builder().stream(false).build())
+                        .collectList()
+                        .block();
+                String title = responses == null ? null : responses.stream()
+                        .flatMap(response -> response.getContent().stream())
+                        .filter(TextBlock.class::isInstance)
+                        .map(TextBlock.class::cast)
+                        .map(TextBlock::getText)
+                        .filter(text -> text != null && !text.isBlank())
+                        .reduce("", String::concat)
+                        .strip();
+                if (title == null || title.isBlank()) {
+                    return;
+                }
+                // 数据库标题列最多保存200个字符，按 Unicode 码点截断以免拆开代理项。
+                int titleLength = title.codePointCount(0, title.length());
+                if (titleLength > 200) {
+                    title = title.substring(0, title.offsetByCodePoints(0, 200));
+                }
+
+                // 条件更新验证会话归属和默认标题，防止迟到结果覆盖用户编辑。
+                conversationMapper.updateTitleIfUnchanged(userId, conversationId, expectedTitle, title);
+
+                logger.info("[会话标题异步改写] conversationId: {}, 成功改写标题", conversationId);
+            } catch (Exception exception) {
+                logger.warn("会话标题异步生成失败, conversationId: {}", conversationId, exception);
+            }
+        });
     }
 
 
@@ -184,7 +244,10 @@ public class ChatAgentPipeline {
         form.setTitle(firstQuestionTitle(question));
 
         ConversationVO created = conversations.create(userId, form);
-        return conversations.owned(userId, created.getId());
+        ConversationEntity createdConversation = conversations.owned(userId, created.getId());
+        // 仅本次确实新建会话时触发标题改写；已有会话在前面的分支直接返回。
+        asyncUpdateConversationTitle(userId, created.getId(), question, form.getTitle());
+        return createdConversation;
     }
 
     /** 将首个问题截取前五个字符作为会话标题。 */
