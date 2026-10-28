@@ -189,14 +189,16 @@ public class ChatAgentPipeline {
     /** 使用轻量级模型异步生成会话标题，并仅在标题仍为默认值时回写。 */
     private void asyncUpdateConversationTitle(Long userId, Long conversationId, String question, String expectedTitle) {
         // 标题生成放到后台任务执行，避免模型响应时间影响本轮对话的请求建立。
-        CompletableFuture.runAsync(() -> {
+        Thread.ofVirtual().name("VirtualThread-updateConversationTitle").start(() -> {
+            long startNanos = System.nanoTime();          // 任务开始
             try {
+                logger.info("[会话标题异步改写进行中] 会话ID：{}, 原始问题：{}", conversationId, question);
                 List<ChatResponse> responses = lightWeightModel.stream(List.of(
-                                Msg.builder().role(MsgRole.SYSTEM)
-                                        .textContent("请根据用户的问题生成简洁的中文会话标题，最多20个汉字。只返回标题文本，不加引号、序号或解释。")
-                                        .build(),
-                                Msg.builder().role(MsgRole.USER).textContent(question).build()),
-                        List.of(), GenerateOptions.builder().stream(false).build())
+                                        Msg.builder().role(MsgRole.SYSTEM)
+                                                .textContent("请根据用户的问题生成简洁的中文会话标题，最多20个汉字。只返回标题文本，不加引号、序号或解释。")
+                                                .build(),
+                                        Msg.builder().role(MsgRole.USER).textContent(question).build()),
+                                List.of(), GenerateOptions.builder().stream(false).build())
                         .collectList()
                         .block();
                 String title = responses == null ? null : responses.stream()
@@ -216,11 +218,12 @@ public class ChatAgentPipeline {
                     title = title.substring(0, title.offsetByCodePoints(0, 200));
                 }
 
+                long costMs = (System.nanoTime() - startNanos) / 1_000_000;  // ② 终点：全部完成
+                logger.info("[会话标题异步改写完成] 会话ID：{} 原始问题：{}  改写后问题：{}  改写总耗时: {}ms", conversationId, question, title, costMs);
                 // 条件更新验证会话归属和默认标题，防止迟到结果覆盖用户编辑。
                 conversationMapper.updateTitleIfUnchanged(userId, conversationId, expectedTitle, title);
-
-                logger.info("[会话标题异步改写] conversationId: {}, 成功改写标题", conversationId);
             } catch (Exception exception) {
+                // 会话标题改写失败不应该影响Agent主流程, 不抛异常
                 logger.warn("会话标题异步生成失败, conversationId: {}", conversationId, exception);
             }
         });
