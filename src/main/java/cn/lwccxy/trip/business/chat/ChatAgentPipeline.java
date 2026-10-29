@@ -107,6 +107,9 @@ public class ChatAgentPipeline {
         AgentRuntimeContextHolder.set(agentRuntimeContext);
 
         // ============ 意图识别 =============
+        intentRecognition(question);
+
+
         String traceId = UUID.randomUUID().toString();
 
         StringBuilder answer = new StringBuilder();
@@ -190,11 +193,20 @@ public class ChatAgentPipeline {
         return emitter;
     }
 
+    private void intentRecognition(String question) {
+        // ==================== L0层 多结构启发 ======================
+        // ==== 核心目的： 快速识别当前是单意图、还是多意图 ================
+        // ==== 1. 单意图进行下一层, 多意图直接走LLM进行意图识别 ===========
+
+
+    }
+
     /** 使用轻量级模型异步生成会话标题，并仅在标题仍为默认值时回写。 */
     private void asyncUpdateConversationTitle(Long userId, Long conversationId, String question, String expectedTitle) {
         // 标题生成放到后台任务执行，避免模型响应时间影响本轮对话的请求建立。
         Thread.ofVirtual().name("VirtualThread-updateTitle").start(() -> {
-            long startNanos = System.nanoTime();          // 任务开始计时
+            // 任务开始计时
+            long startNanos = System.nanoTime();
             try {
                 logger.info("[会话标题异步改写进行中] 会话ID：{}, 原始问题：{}", conversationId, question);
                 List<ChatResponse> responses = lightWeightModel.stream(List.of(

@@ -1,9 +1,16 @@
 package cn.lwccxy.trip.agent.config;
 
+import cn.lwccxy.trip.business.intent.domain.entity.IntentUtteranceEntity;
+import cn.lwccxy.trip.business.intent.enums.IntentUtteranceStatus;
+import cn.lwccxy.trip.business.intent.mapper.IntentUtteranceMapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.agentscope.core.embedding.EmbeddingModel;
 import io.agentscope.core.embedding.dashscope.DashScopeTextEmbedding;
+import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.rag.Knowledge;
 import io.agentscope.core.rag.knowledge.SimpleKnowledge;
+import io.agentscope.core.rag.model.Document;
+import io.agentscope.core.rag.model.DocumentMetadata;
 import io.agentscope.core.rag.reader.ReaderInput;
 import io.agentscope.core.rag.reader.SplitStrategy;
 import io.agentscope.core.rag.reader.TextReader;
@@ -31,7 +38,18 @@ public class CorpTripAgentRagConfig {
     private static final String POLICY_RESOURCE = "policy/corptrip_policy.docx";
     private static final String WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     private static final int EMBEDDING_DIMENSIONS = 1024;
-    private final static String DASH_SCOPE_API_KEY_ENV = "sk-43f3ec833a874f91a52f757fd55b9b9d";
+    private static final String DASHSCOPE_API_KEY_ENV = "DASHSCOPE_API_KEY";
+
+    private final IntentUtteranceMapper intentUtteranceMapper;
+
+    /**
+     * 创建知识库配置并注入意图表达数据访问接口。
+     *
+     * @param intentUtteranceMapper 意图口语化表达 Mapper
+     */
+    public CorpTripAgentRagConfig(IntentUtteranceMapper intentUtteranceMapper) {
+        this.intentUtteranceMapper = intentUtteranceMapper;
+    }
 
 
     /**
@@ -55,6 +73,27 @@ public class CorpTripAgentRagConfig {
     }
 
     /**
+     * 创建统一的意图向量知识库，并加载数据库中的所有启用口语化表达。
+     *
+     * <p>所有意图表达共用一个向量索引；每条文档通过 metadata 中的 {@code intent} 字段
+     * 保存所属意图编码，召回后由上层根据该字段进行意图路由。</p>
+     *
+     * @return 包含全部意图表达的统一知识库
+     */
+    @Bean(name = "intentKnowledge")
+    public Knowledge intentKnowledge() {
+        // 只加载启用表达；后续后台禁用或删除后，重启即可从索引中移除对应文档。
+        List<IntentUtteranceEntity> activeUtterances = intentUtteranceMapper.selectList(
+                new LambdaQueryWrapper<IntentUtteranceEntity>()
+                        .eq(IntentUtteranceEntity::getStatus, IntentUtteranceStatus.ACTIVE.name())
+                        .orderByAsc(IntentUtteranceEntity::getId));
+        // 所有意图表达共用一个 Store，避免为每个意图拆分索引导致召回范围被人为切断。
+        EmbeddingModel embeddingModel = createEmbeddingModel("意图口语表达");
+        return createIntentKnowledge(activeUtterances, embeddingModel);
+    }
+
+
+    /**
      * 为指定的 DOCX 资源创建独立的内存知识库并完成预向量化。
      *
      * @param resourcePath classpath 下的 DOCX 资源路径
@@ -62,18 +101,8 @@ public class CorpTripAgentRagConfig {
      * @return 已加载文档向量的知识库
      */
     private Knowledge createKnowledge(String resourcePath, String documentName) {
-        // 启动时读取环境变量，避免将 DashScope 密钥写入源码或资源文件。
-        String apiKey = DASH_SCOPE_API_KEY_ENV;
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("环境变量 DASHSCOPE_API_KEY 未配置，无法初始化" + documentName + "知识库");
-        }
-
         // 使用与向量存储一致的 1024 维嵌入模型，保证写入和检索的向量维度匹配。
-        EmbeddingModel embeddingModel = DashScopeTextEmbedding.builder()
-                .apiKey(apiKey)
-                .modelName("text-embedding-v3")
-                .dimensions(EMBEDDING_DIMENSIONS)
-                .build();
+        EmbeddingModel embeddingModel = createEmbeddingModel(documentName);
         Knowledge knowledge = SimpleKnowledge.builder()
                 .embeddingModel(embeddingModel)
                 .embeddingStore(InMemoryStore.builder().dimensions(EMBEDDING_DIMENSIONS).build())
@@ -90,6 +119,70 @@ public class CorpTripAgentRagConfig {
         }
         knowledge.addDocuments(documents).block();
         return knowledge;
+    }
+
+    /**
+     * 创建统一意图知识库，并将所有启用表达加入同一个向量索引。
+     *
+     * @param utterances 所有意图下已启用的口语化表达
+     * @param embeddingModel 当前启动共享的文本嵌入模型
+     * @return 统一意图知识库
+     */
+    private Knowledge createIntentKnowledge(List<IntentUtteranceEntity> utterances,
+                                            EmbeddingModel embeddingModel) {
+        Knowledge knowledge = SimpleKnowledge.builder()
+                .embeddingModel(embeddingModel)
+                .embeddingStore(InMemoryStore.builder().dimensions(EMBEDDING_DIMENSIONS).build())
+                .build();
+        if (utterances.isEmpty()) {
+            return knowledge;
+        }
+
+        // 每条口语表达作为独立文档写入；payload 保留所属意图编码和来源记录 ID，供召回后路由及追踪。
+        List<Document> documents = utterances.stream()
+                .map(utterance -> toIntentDocument(utterance.getIntentCode(), utterance))
+                .toList();
+        knowledge.addDocuments(documents).block();
+        return knowledge;
+    }
+
+    /**
+     * 将数据库中的一条意图表达转换为带路由 metadata 的向量文档。
+     *
+     * @param intentCode 文档所属意图编码
+     * @param utterance 数据库中的口语化表达
+     * @return 内容为表达文本、payload 含意图编码的文档
+     */
+    Document toIntentDocument(String intentCode, IntentUtteranceEntity utterance) {
+        String documentId = "intent-utterance-" + utterance.getId();
+        DocumentMetadata metadata = DocumentMetadata.builder()
+                .content(TextBlock.builder().text(utterance.getUtteranceText()).build())
+                .docId(documentId)
+                .chunkId(documentId)
+                .addPayload("intent", intentCode)
+                .addPayload("utterance_id", utterance.getId())
+                .build();
+        return new Document(metadata);
+    }
+
+    /**
+     * 从环境变量读取密钥并创建文本嵌入模型。
+     *
+     * @param documentName 文档或知识库名称，用于错误定位
+     * @return DashScope 文本嵌入模型
+     */
+    private EmbeddingModel createEmbeddingModel(String documentName) {
+        // 密钥只从运行环境读取，避免配置源码和资源文件保存凭证。
+        String apiKey = "sk-43f3ec833a874f91a52f757fd55b9b9d";
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("环境变量 " + DASHSCOPE_API_KEY_ENV + " 未配置，无法初始化" + documentName + "知识库");
+        }
+
+        return DashScopeTextEmbedding.builder()
+                .apiKey(apiKey)
+                .modelName("text-embedding-v3")
+                .dimensions(EMBEDDING_DIMENSIONS)
+                .build();
     }
 
     /**
