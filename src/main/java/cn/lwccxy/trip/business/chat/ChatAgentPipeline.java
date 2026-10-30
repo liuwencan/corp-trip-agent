@@ -3,7 +3,10 @@ package cn.lwccxy.trip.business.chat;
 import cn.lwccxy.trip.agent.MasterAgent;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
+import cn.lwccxy.trip.agent.enums.IntentType;
 import cn.lwccxy.trip.agent.enums.ModelPricingEnum;
+import cn.lwccxy.trip.agent.enums.RecognitionLevel;
+import cn.lwccxy.trip.agent.intent.IntentRecognizer;
 import cn.lwccxy.trip.agent.utils.ModelTokenBillingUtil;
 import cn.lwccxy.trip.business.conversation.domain.entity.ConversationEntity;
 import cn.lwccxy.trip.business.conversation.domain.entity.MessageEntity;
@@ -66,12 +69,14 @@ public class ChatAgentPipeline {
     private final TransactionTemplate transactions;
     private final SseEmitterRegistry sseEmitterRegistry;
     private final Model lightWeightModel;
+    private final IntentRecognizer intentRecognizer;
 
     /** 构造会话流水线，并明确注入用于标题生成的轻量级模型。 */
     public ChatAgentPipeline(ConversationService conversations, ConversationCoordinator coordinator,
                              ConversationMapper conversationMapper, MessageMapper messageMapper,
                              TransactionTemplate transactions, SseEmitterRegistry sseEmitterRegistry,
-                             @Qualifier("lightWeightModel") Model lightWeightModel) {
+                             @Qualifier("lightWeightModel") Model lightWeightModel,
+                             IntentRecognizer intentRecognizer) {
         this.conversations = conversations;
         this.coordinator = coordinator;
         this.conversationMapper = conversationMapper;
@@ -79,6 +84,7 @@ public class ChatAgentPipeline {
         this.transactions = transactions;
         this.sseEmitterRegistry = sseEmitterRegistry;
         this.lightWeightModel = lightWeightModel;
+        this.intentRecognizer = intentRecognizer;
     }
 
 
@@ -107,8 +113,8 @@ public class ChatAgentPipeline {
         AgentRuntimeContextHolder.set(agentRuntimeContext);
 
         // ============ 意图识别 =============
-        intentRecognition(question);
-
+        // 在构建 prototype MasterAgent 前完成识别，使本轮 Agent 能拿到稳定的路由提示。
+        IntentRecognizer.IntentRecognitionResult intentResult = intentRecognition(question);
 
         String traceId = UUID.randomUUID().toString();
 
@@ -131,7 +137,8 @@ public class ChatAgentPipeline {
                 .textContent(question)
                 .build();
 
-        Flux<Event> events = masterAgent.stream(List.of(userMsg), StreamOptions.defaults());
+        // 将识别结果作为一次性系统消息传给主 Agent，原始用户消息仍单独保留，避免改写用户语义或污染历史。
+        Flux<Event> events = masterAgent.stream(buildAgentMessages(userMsg, intentResult), StreamOptions.defaults());
         events.subscribe(event -> {
             if (terminal.get()) {
                 return;
@@ -193,12 +200,61 @@ public class ChatAgentPipeline {
         return emitter;
     }
 
-    private void intentRecognition(String question) {
-        // ==================== L0层 多结构启发 ======================
-        // ==== 核心目的： 快速识别当前是单意图、还是多意图 ================
-        // ==== 1. 单意图进行下一层, 多意图直接走LLM进行意图识别 ===========
+    /**
+     * 编排当前问题的分层意图识别，并记录识别结果供后续主 Agent 路由参考。
+     *
+     * <p>识别器内部负责 L0/L1/L2、查询改写和 L3 兜底；流水线只负责调用边界、异常隔离和审计日志。
+     * 意图识别失败不能阻断正常对话，因此异常时使用 UNKNOWN 结果继续交给 MasterAgent。</p>
+     *
+     * @param question 用户原始问题
+     * @return 识别结果；识别异常时返回 UNKNOWN 的 L3 结果
+     */
+    private IntentRecognizer.IntentRecognitionResult intentRecognition(String question) {
+        long startNanos = System.nanoTime();
+        try {
+            IntentRecognizer.IntentRecognitionResult result = intentRecognizer.recognize(question);
+            long costMs = (System.nanoTime() - startNanos) / 1_000_000;
+            IntentType intentType = result == null || result.intentType() == null
+                    ? IntentType.UNKNOWN : result.intentType();
+            RecognitionLevel level = result == null || result.level() == null
+                    ? RecognitionLevel.NONE : result.level();
+            boolean multiIntent = result != null && result.multiIntent();
+            logger.info("[ChatAgentPipeline意图编排] 层级={}, 意图={}, 目标Agent={}, 多意图={}, 耗时={}ms",
+                    level, intentType, intentType.getTargetAgent(), multiIntent, costMs);
+            return result == null
+                    ? new IntentRecognizer.RecognitionResultL3(false, IntentType.UNKNOWN)
+                    : result;
+        } catch (Exception exception) {
+            long costMs = (System.nanoTime() - startNanos) / 1_000_000;
+            logger.warn("[ChatAgentPipeline意图编排] 意图识别失败，降级到 MasterAgent，耗时={}ms",
+                    costMs, exception);
+            return new IntentRecognizer.RecognitionResultL3(false, IntentType.UNKNOWN);
+        }
+    }
 
+    /**
+     * 构造主 Agent 的本轮输入消息，并注入不可变的路由提示。
+     *
+     * @param userMessage 原始用户消息
+     * @param intentResult 意图识别结果
+     * @return 包含路由提示和原始用户消息的消息列表
+     */
+    private List<Msg> buildAgentMessages(Msg userMessage,
+                                         IntentRecognizer.IntentRecognitionResult intentResult) {
+        IntentType intentType = intentResult == null || intentResult.intentType() == null
+                ? IntentType.UNKNOWN : intentResult.intentType();
+        RecognitionLevel level = intentResult == null || intentResult.level() == null
+                ? RecognitionLevel.NONE : intentResult.level();
+        boolean multiIntent = intentResult != null && intentResult.multiIntent();
 
+        // 路由提示只引用枚举值，不拼接用户输入，避免把用户内容提升为系统指令。
+        String routingHint = String.format(
+                "本轮请求的前置意图识别结果（仅作为路由参考，不替代用户原话）：识别层级=%s，意图=%s，目标智能体=%s，多意图=%s。"
+                        + "请以用户原始问题为最终依据；多意图请求需覆盖全部独立诉求，未知意图由你继续判断。",
+                level, intentType, intentType.getTargetAgent(), multiIntent);
+        return List.of(
+                Msg.builder().role(MsgRole.SYSTEM).textContent(routingHint).build(),
+                userMessage);
     }
 
     /** 使用轻量级模型异步生成会话标题，并仅在标题仍为默认值时回写。 */
