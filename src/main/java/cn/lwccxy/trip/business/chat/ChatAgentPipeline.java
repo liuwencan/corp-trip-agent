@@ -71,6 +71,9 @@ public class ChatAgentPipeline {
     private final Model lightWeightModel;
     private final IntentRecognizer intentRecognizer;
 
+    /** 查询改写最多读取的历史消息数量，避免整段会话进入改写模型上下文。 */
+    private static final int INTENT_HISTORY_MESSAGE_LIMIT = 12;
+
     /** 构造会话流水线，并明确注入用于标题生成的轻量级模型。 */
     public ChatAgentPipeline(ConversationService conversations, ConversationCoordinator coordinator,
                              ConversationMapper conversationMapper, MessageMapper messageMapper,
@@ -98,6 +101,8 @@ public class ChatAgentPipeline {
         ConversationEntity conversation = ensureConversation(userId, conversationId, question);
         // 新建会话时请求参数中的 conversationId 仍为空，后续消息和 Agent session 必须使用数据库生成的 ID。
         Long activeConversationId = conversation.getId();
+        // 在保存本轮用户消息前读取历史，避免把当前问题重复作为历史上下文传给查询改写模型。
+        List<IntentRecognizer.ConversationTurn> intentHistory = loadIntentHistory(userId, activeConversationId);
         // 3. 问题持久化
         MessageVO userMessage = question == null ? null : append(userId, activeConversationId, MessageRole.USER, question, null);
         // 5. 注册SSE
@@ -114,7 +119,7 @@ public class ChatAgentPipeline {
 
         // ============ 意图识别 =============
         // 在构建 prototype MasterAgent 前完成识别，使本轮 Agent 能拿到稳定的路由提示。
-        IntentRecognizer.IntentRecognitionResult intentResult = intentRecognition(question);
+        IntentRecognizer.IntentRecognitionResult intentResult = intentRecognition(question, intentHistory);
 
         String traceId = UUID.randomUUID().toString();
 
@@ -137,6 +142,10 @@ public class ChatAgentPipeline {
                 .textContent(question)
                 .build();
 
+        // 记录首Token时长：以提交 Agent 流请求的时刻为起点，统计首个可见文本 Token 的端到端等待时长。
+        long agentStartNanos = System.nanoTime();
+        AtomicBoolean firstTokenRecorded = new AtomicBoolean();
+
         // 将识别结果作为一次性系统消息传给主 Agent，原始用户消息仍单独保留，避免改写用户语义或污染历史。
         Flux<Event> events = masterAgent.stream(buildAgentMessages(userMsg, intentResult), StreamOptions.defaults());
         events.subscribe(event -> {
@@ -151,11 +160,21 @@ public class ChatAgentPipeline {
                 }
 
                 if(delta != null && !delta.isEmpty()){
+                    // 记录首Token时长
+                    recordFirstTokenLatency(activeConversationId, agentStartNanos,
+                            firstTokenRecorded);
                     SseEmitterSender.send(emitter, SseEventEnum.DELTA, delta);
                 }
             } else if (event.getType() == EventType.AGENT_RESULT) {
                 Msg result = event.getMessage();
                 GenerateReason reason = result == null ? null : result.getGenerateReason();
+
+                // 某些模型不会发送中间推理事件，首次文本可能只出现在最终 Agent 结果中。
+                if (result != null && result.getTextContent() != null
+                        && !result.getTextContent().isBlank()) {
+                    recordFirstTokenLatency(activeConversationId, agentStartNanos,
+                            firstTokenRecorded);
+                }
 
                 if (isAskUserSuspension(result)) {
                     // ask_user 暂停属于等待用户输入，Hook 已发送 ask 事件，此处正常结束当前 SSE。
@@ -201,6 +220,23 @@ public class ChatAgentPipeline {
     }
 
     /**
+     * 记录当前 Agent 对话的首个可见文本 Token 时长。
+     *
+     * @param conversationId 会话标识
+     * @param startNanos Agent 流请求开始时间
+     * @param recorded 首 Token 是否已经记录的并发标记
+     */
+    private void recordFirstTokenLatency(Long conversationId, long startNanos,
+                                         AtomicBoolean recorded) {
+        // SSE 事件在异步线程中回调，使用 CAS 保证并发事件只产生一条首 Token 指标日志。
+        if (!recorded.compareAndSet(false, true)) {
+            return;
+        }
+        long costMs = (System.nanoTime() - startNanos) / 1_000_000;
+        logger.info("[Agent首Token指标] conversationId={}, 首Token时长={}ms", conversationId, costMs);
+    }
+
+    /**
      * 编排当前问题的分层意图识别，并记录识别结果供后续主 Agent 路由参考。
      *
      * <p>识别器内部负责 L0/L1/L2、查询改写和 L3 兜底；流水线只负责调用边界、异常隔离和审计日志。
@@ -209,10 +245,11 @@ public class ChatAgentPipeline {
      * @param question 用户原始问题
      * @return 识别结果；识别异常时返回 UNKNOWN 的 L3 结果
      */
-    private IntentRecognizer.IntentRecognitionResult intentRecognition(String question) {
+    private IntentRecognizer.IntentRecognitionResult intentRecognition(
+            String question, List<IntentRecognizer.ConversationTurn> history) {
         long startNanos = System.nanoTime();
         try {
-            IntentRecognizer.IntentRecognitionResult result = intentRecognizer.recognize(question);
+            IntentRecognizer.IntentRecognitionResult result = intentRecognizer.recognize(question, history);
             long costMs = (System.nanoTime() - startNanos) / 1_000_000;
             IntentType intentType = result == null || result.intentType() == null
                     ? IntentType.UNKNOWN : result.intentType();
@@ -229,6 +266,35 @@ public class ChatAgentPipeline {
             logger.warn("[ChatAgentPipeline意图编排] 意图识别失败，降级到 MasterAgent，耗时={}ms",
                     costMs, exception);
             return new IntentRecognizer.RecognitionResultL3(false, IntentType.UNKNOWN);
+        }
+    }
+
+    /**
+     * 读取当前会话最近消息并转换为查询改写所需的历史轮次。
+     *
+     * @param userId 当前用户标识
+     * @param conversationId 当前会话标识
+     * @return 按时间正序排列的有限历史消息
+     */
+    private List<IntentRecognizer.ConversationTurn> loadIntentHistory(Long userId, Long conversationId) {
+        try {
+            List<MessageEntity> recentMessages = messageMapper.recentOwned(
+                    userId, conversationId, INTENT_HISTORY_MESSAGE_LIMIT);
+            if (recentMessages == null || recentMessages.isEmpty()) {
+                return List.of();
+            }
+            // Mapper 按倒序返回最近消息，改写模型按正序阅读更符合会话上下文。
+            List<IntentRecognizer.ConversationTurn> history = new ArrayList<>(recentMessages.size());
+            for (int index = recentMessages.size() - 1; index >= 0; index--) {
+                MessageEntity message = recentMessages.get(index);
+                history.add(new IntentRecognizer.ConversationTurn(message.getRole(), message.getContent()));
+            }
+            return List.copyOf(history);
+        } catch (Exception exception) {
+            // 历史上下文属于改写增强信息，读取失败时退化为无历史识别，不能阻断当前会话。
+            logger.warn("[意图查询改写] 会话历史读取失败，conversationId={}，将使用当前问题继续识别",
+                    conversationId, exception);
+            return List.of();
         }
     }
 
