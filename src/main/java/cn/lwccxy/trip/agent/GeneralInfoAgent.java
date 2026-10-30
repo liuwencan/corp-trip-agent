@@ -2,8 +2,11 @@ package cn.lwccxy.trip.agent;
 
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
+import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.tools.AskUserTool;
 import cn.lwccxy.trip.agent.tools.UserInfoTools;
+import io.agentscope.core.memory.autocontext.AutoContextConfig;
+import io.agentscope.core.memory.autocontext.AutoContextMemory;
 import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.rag.Knowledge;
 import io.agentscope.core.rag.RAGMode;
@@ -26,7 +29,9 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
+import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 
 @Configuration("generalInfoAgentConfiguration")
 public class GeneralInfoAgent {
@@ -40,6 +45,8 @@ public class GeneralInfoAgent {
     private final McpClientWrapper weatherMcpClient;
     private final Knowledge corptripGuidelinesKnowledge;
     private final Knowledge corptripPolicyKnowledge;
+    private final PersistSessionHook persistSessionHook;
+
 
     /**
      * 创建通用出行信息 Agent 配置，并绑定出差指南知识库。
@@ -49,12 +56,14 @@ public class GeneralInfoAgent {
      * @param weatherMcpClient 天气 MCP 客户端
      */
     public GeneralInfoAgent(DataSource dataSource, Model model, McpClientWrapper weatherMcpClient,
-                            @Qualifier("corptripGuidelinesKnowledge") Knowledge corptripGuidelinesKnowledge, @Qualifier("corptripPolicyKnowledge") Knowledge corptripPolicyKnowledge) {
+                            @Qualifier("corptripGuidelinesKnowledge") Knowledge corptripGuidelinesKnowledge, @Qualifier("corptripPolicyKnowledge") Knowledge corptripPolicyKnowledge,
+                            PersistSessionHook persistSessionHook) {
         this.dataSource = dataSource;
         this.model = model;
         this.weatherMcpClient = weatherMcpClient;
         this.corptripGuidelinesKnowledge = corptripGuidelinesKnowledge;
         this.corptripPolicyKnowledge = corptripPolicyKnowledge;
+        this.persistSessionHook = persistSessionHook;
     }
 
 
@@ -79,6 +88,9 @@ public class GeneralInfoAgent {
         // https://market.aliyun.com/detail/cmapi00074002?spm=5176.29867242_210807074.0.0.44e83e7eLgrp1C
         toolkit.registerMcpClient(weatherMcpClient).block();
 
+        // AgentScope的六层上下文压缩机制
+        AutoContextConfig autoContextConfig = AutoContextConfig.builder()
+                .build();
 
         return ReActAgent.builder()
                 .name("GeneralInfoAgent")
@@ -91,12 +103,14 @@ public class GeneralInfoAgent {
                         .timeout(Duration.ofMinutes(1))
                         .maxAttempts(3)
                         .initialBackoff(Duration.ofSeconds(3))
-                        .retryOn(error -> error instanceof java.io.IOException)
+                        .retryOn(error -> error instanceof IOException)
                         .build())
                 .toolExecutionContext(context)
                 // 启用 Generic RAG 模式
                 .knowledge(corptripGuidelinesKnowledge).knowledge(corptripPolicyKnowledge) // 添加 差旅政策/差旅指南 知识库d
                 .ragMode(RAGMode.AGENTIC)
+                .memory(new AutoContextMemory(autoContextConfig, model))
+                .hooks(List.of(persistSessionHook))
                 .build();
     }
 }
