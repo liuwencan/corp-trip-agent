@@ -137,6 +137,39 @@ CREATE TABLE `t_intent_utterance` (
     KEY `idx_intent_utterance_code_status` (`intent_code`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='意图口语化表达维护';
 
+CREATE TABLE `trip_order` (
+    `id` varchar(64) NOT NULL COMMENT '出差申请单ID',
+    `user_id` varchar(64) NOT NULL COMMENT '申请人ID',
+    `destination` varchar(256) NOT NULL COMMENT '目的地',
+    `departure_city` varchar(128) NOT NULL COMMENT '出发城市',
+    `departure_date` varchar(32) NOT NULL COMMENT '出发日期',
+    `return_date` varchar(32) NOT NULL COMMENT '返回日期',
+    `purpose` varchar(512) NOT NULL COMMENT '出差事由',
+    `status` varchar(32) NOT NULL COMMENT '申请单状态',
+    `approval_id` varchar(64) DEFAULT NULL COMMENT '关联审批记录ID',
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_trip_order_user_time` (`user_id`, `updated_at`),
+    KEY `idx_trip_order_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='出差申请单';
+
+CREATE TABLE `trip_approval_record` (
+    `id` varchar(64) NOT NULL COMMENT '审批记录ID',
+    `user_id` varchar(64) NOT NULL COMMENT '申请人ID',
+    `title` varchar(256) NOT NULL COMMENT '审批标题',
+    `status` varchar(32) NOT NULL COMMENT '审批状态',
+    `approval_form` json NOT NULL COMMENT '审批表单快照',
+    `remark` varchar(512) DEFAULT NULL COMMENT '审批备注',
+    `submit_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提交时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `order_id` varchar(64) NOT NULL COMMENT '关联出差申请单ID',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_trip_approval_order` (`order_id`),
+    KEY `idx_trip_approval_status_time` (`status`, `submit_time`),
+    KEY `idx_trip_approval_user_time` (`user_id`, `submit_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='出差申请审批记录';
+
 INSERT INTO `t_intent_utterance` (`intent_code`, `utterance_text`, `status`, `remark`) VALUES
 ('TRAVEL_POLICY_QUERY', '公司出差住酒店能报销多少钱', 'ACTIVE', '住宿标准咨询'),
 ('TRAVEL_POLICY_QUERY', '出差坐飞机有什么级别要求', 'ACTIVE', '交通标准咨询'),
