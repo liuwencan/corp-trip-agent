@@ -22,6 +22,25 @@ CREATE TABLE `t_user` (
     UNIQUE KEY `uk_user_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='用户账户';
 
+CREATE TABLE `user_provider_api_key` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `provider_code` varchar(32) NOT NULL COMMENT '第三方服务商编码，如TUNIU',
+    `api_key_ciphertext` text NOT NULL COMMENT 'API Key加密密文',
+    `status` varchar(16) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE/INACTIVE/REVOKED',
+    `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+    `created_by` bigint DEFAULT NULL COMMENT '创建人用户ID',
+    `updated_by` bigint DEFAULT NULL COMMENT '最后修改人用户ID',
+    `create_time` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '创建时间',
+    `update_time` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+        ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_provider` (`user_id`, `provider_code`),
+    KEY `idx_user_status` (`user_id`, `status`),
+    CONSTRAINT `fk_user_provider_api_key_user`
+        FOREIGN KEY (`user_id`) REFERENCES `t_user` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='用户第三方旅行平台API Key';
+
 CREATE TABLE `t_user_password_reset_log` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
     `target_user_id` bigint NOT NULL COMMENT '目标用户ID',
