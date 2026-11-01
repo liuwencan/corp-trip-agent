@@ -27,3 +27,6 @@ application-local.properties
 
 # 依赖
 node_modules/
+
+# 单元测试
+/src/test/

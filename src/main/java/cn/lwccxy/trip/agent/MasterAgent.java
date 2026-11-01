@@ -80,6 +80,8 @@ public class MasterAgent {
         ReActAgent generalInfoAgent = applicationContext.getBean("generalInfoAgent", ReActAgent.class);
         // 行程单管理 Agent 同样按本次会话创建，避免不同会话共享运行时状态。
         ReActAgent tripOrderAgent = applicationContext.getBean("orderManagementAgent", ReActAgent.class);
+        // 行程规划 Agent 只生成候选方案，不拥有预订或业务数据写入工具。
+        ReActAgent itineraryPlanningAgent = applicationContext.getBean("itineraryPlanningAgent", ReActAgent.class);
 
         SubAgentConfig config = SubAgentConfig.builder()
                 .toolName("GeneralInfoAgent")                    // 自定义工具名称
@@ -96,6 +98,12 @@ public class MasterAgent {
                 .forwardEvents(false)
                 .build();
         toolkit.registerAgentTool(new SubAgentTool(() -> tripOrderAgent, tripOrderConfig));
+        SubAgentConfig itineraryPlanningConfig = SubAgentConfig.builder()
+                .toolName("ItineraryPlanningAgent")
+                .description("负责根据出差目标和用户约束规划交通、住宿及日程候选方案，指出信息缺口、假设和取舍；不查询实时资源或预订")
+                .forwardEvents(false)
+                .build();
+        toolkit.registerAgentTool(new SubAgentTool(() -> itineraryPlanningAgent, itineraryPlanningConfig));
         toolkit.registerTool(new AskUserTool());
         // 阿里云天气MCP接入
         // https://market.aliyun.com/detail/cmapi00074002?spm=5176.29867242_210807074.0.0.44e83e7eLgrp1C
@@ -118,7 +126,9 @@ public class MasterAgent {
                 .sysPrompt("你是企业智能差旅助手主智能体，负责理解请求并协调专业子智能体。"
                         + "天气、目的地、交通、餐饮、用户信息和差旅政策问题交给 GeneralInfoAgent；"
                         + "创建出差申请并提交管理员待审批队列、已有申请单和审批记录查询、申请单修改或取消草案交给 TripOrderManagementAgent。"
-                        + "行程规划和预订请求当前没有对应的业务执行智能体，不得声称已规划落单或完成预订；"
+                        + "尚未预订的差旅行程规划交给 ItineraryPlanningAgent。开始规划前，必须先调用 GeneralInfoAgent 查询目的地相关信息和行程日期天气；将查询到的目的地特点、天气及来源或时间范围一并交给 ItineraryPlanningAgent，供其形成有依据的出行建议。"
+                        + "若日期或城市信息不足以查询天气，应说明缺少的信息并继续提供明确标注假设的目的地常识建议；不得把常识描述成实时查询结果。ItineraryPlanningAgent 只生成候选建议，没有实时交通、酒店或价格查询能力。"
+                        + "预订请求仍无对应的业务执行智能体，不得声称已查询实时资源、完成审核或完成预订；"
                         + "申请工具返回 SUBMITTED 和 PENDING 表示已进入管理员审批队列，不表示审批通过。多项独立诉求应逐项处理。")
                 .toolkit(toolkit)
                 .toolExecutionContext(context)

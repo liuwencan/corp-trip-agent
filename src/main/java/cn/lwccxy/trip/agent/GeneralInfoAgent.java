@@ -6,6 +6,7 @@ import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.tools.AskUserTool;
 import cn.lwccxy.trip.agent.tools.UserInfoTools;
+import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
 import io.agentscope.core.memory.autocontext.AutoContextMemory;
 import io.agentscope.core.model.ExecutionConfig;
@@ -47,6 +48,7 @@ public class GeneralInfoAgent {
     private final Knowledge corptripPolicyKnowledge;
     private final PersistSessionHook persistSessionHook;
     private final ProgressNotificationHook progressNotificationHook;
+    private final DestinationLiveTools destinationLiveTools;
 
 
 
@@ -60,7 +62,8 @@ public class GeneralInfoAgent {
      */
     public GeneralInfoAgent(DataSource dataSource, Model model, McpClientWrapper weatherMcpClient,
                             @Qualifier("corptripGuidelinesKnowledge") Knowledge corptripGuidelinesKnowledge, @Qualifier("corptripPolicyKnowledge") Knowledge corptripPolicyKnowledge,
-                            PersistSessionHook persistSessionHook, ProgressNotificationHook progressNotificationHook) {
+                            PersistSessionHook persistSessionHook, ProgressNotificationHook progressNotificationHook,
+                            DestinationLiveTools destinationLiveTools) {
         this.dataSource = dataSource;
         this.model = model;
         this.weatherMcpClient = weatherMcpClient;
@@ -68,6 +71,7 @@ public class GeneralInfoAgent {
         this.corptripPolicyKnowledge = corptripPolicyKnowledge;
         this.persistSessionHook = persistSessionHook;
         this.progressNotificationHook = progressNotificationHook;
+        this.destinationLiveTools = destinationLiveTools;
     }
 
 
@@ -87,6 +91,8 @@ public class GeneralInfoAgent {
         Toolkit toolkit = new Toolkit();
 //        toolkit.registerTool(new AskUserTool());
         toolkit.registerTool(new UserInfoTools());
+        // 通用信息查询与行程规划共享同一套目的地天气和最新资讯工具。
+        toolkit.registerTool(destinationLiveTools);
 
         // 阿里云天气MCP接入
         // https://market.aliyun.com/detail/cmapi00074002?spm=5176.29867242_210807074.0.0.44e83e7eLgrp1C
@@ -100,7 +106,7 @@ public class GeneralInfoAgent {
                 .name("GeneralInfoAgent")
                 .description("负责查询天气、目的地资讯、当地交通和餐饮等通用信息")
                 .model(model)
-                .sysPrompt("你是企业差旅通用信息子智能体。负责查询天气、目的地资讯、当地交通、餐饮和其他出行相关信息。回答时说明信息的时间范围和不确定性，只能使用已注册的查询工具，不得编造实时数据，不负责创建订单或修改差旅单。")
+                .sysPrompt("你是企业差旅通用信息子智能体。负责查询天气、目的地资讯、当地交通、餐饮和其他出行相关信息。涉及天气时优先调用 query_weather，涉及目的地最新活动、交通或风险资讯时调用 query_destination_news；工具未启用或查询失败时明确说明。回答时说明来源、时间范围和不确定性，只能使用已注册的查询工具，不得编造实时数据，不负责创建订单或修改差旅单。")
                 .toolkit(toolkit)
                 .maxIters(5) // 最大循环轮数
                 .toolExecutionConfig(ExecutionConfig.builder() // 工具执行配置

@@ -2,10 +2,16 @@ package cn.lwccxy.trip.agent.config;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
 import io.agentscope.core.session.Session;
 import io.agentscope.core.session.mysql.MysqlSession;
+import io.agentscope.core.skill.repository.AgentSkillRepository;
+import io.agentscope.core.skill.repository.ClasspathSkillRepository;
+import io.agentscope.core.skill.repository.FileSystemSkillRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import javax.sql.DataSource;
+import java.io.IOException;
+import java.nio.file.Path;
 
 /**
  * 差旅智能体所有配置
@@ -25,6 +31,13 @@ public class CorpTripAgentConfig {
     }
 
 
-
+    @Bean
+    public AgentSkillRepository fileSystemSkillRepository(
+            @Value("${corp.trip.skillspath:classpath:skills}") String skillPath) throws IOException {
+        if (skillPath.startsWith("classpath:")) {
+            return new ClasspathSkillRepository(skillPath.substring("classpath:".length()));
+        }
+        return new FileSystemSkillRepository(Path.of(skillPath));
+    }
 
 }
