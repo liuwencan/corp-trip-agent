@@ -16,7 +16,7 @@ public enum IntentType {
     TRAVEL_INFO_QUERY("TRAVEL_INFO_QUERY", "GeneralInfoAgent",
             Set.of("天气", "目的地", "景点", "当地交通", "交通信息", "路线", "餐饮", "周边信息")),
     /** 创建或提交出差申请。 */
-    CREATE_TRIP_APPLICATION("CREATE_TRIP_APPLICATION", "TripApplicationAgent",
+    CREATE_TRIP_APPLICATION("CREATE_TRIP_APPLICATION", "TripOrderManagementAgent",
             Set.of("出差申请", "差旅申请", "申请出差", "提交出差", "创建出差", "发起出差", "出差审批")),
     /** 规划交通、住宿和日程。 */
     PLAN_ITINERARY("PLAN_ITINERARY", "ItineraryPlanningAgent",

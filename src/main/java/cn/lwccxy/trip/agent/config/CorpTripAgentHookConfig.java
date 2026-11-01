@@ -2,6 +2,7 @@ package cn.lwccxy.trip.agent.config;
 
 import cn.lwccxy.trip.agent.hooks.ConfirmationHook;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
+import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
 import cn.lwccxy.trip.business.conversation.service.ConversationService;
 import io.agentscope.core.session.Session;
@@ -30,6 +31,11 @@ public class CorpTripAgentHookConfig {
     public ConfirmationHook confirmationHook(SseEmitterRegistry sseEmitterRegistry,
                                              ConversationService conversationService) {
         return new ConfirmationHook(sseEmitterRegistry, conversationService);
+    }
+    
+    @Bean
+    public ProgressNotificationHook progressNotificationHook(SseEmitterRegistry sseEmitterRegistry) {
+        return new ProgressNotificationHook(sseEmitterRegistry);
     }
 
 }
