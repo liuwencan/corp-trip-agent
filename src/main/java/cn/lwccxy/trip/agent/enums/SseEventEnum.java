@@ -14,7 +14,6 @@ public enum SseEventEnum {
     // =========== 工具枚举 ==============
     TOOL_START("tool_start", "工具开始执行"),
     TOOL_RESULT("tool_result", "工具执行结果"),
-    TOOL_SUCCESS("tool_success", "工具执行成功"),
     TOOL_ERROR("tool_error", "工具执行失败"),
 
     DELTA("delta", "回答文本增量事件"),
