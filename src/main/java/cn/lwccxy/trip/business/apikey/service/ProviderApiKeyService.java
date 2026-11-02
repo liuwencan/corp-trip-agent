@@ -1,5 +1,6 @@
 package cn.lwccxy.trip.business.apikey.service;
 
+import cn.lwccxy.trip.agent.utils.AesUtil;
 import cn.lwccxy.trip.business.apikey.domain.entity.ProviderApiKeyEntity;
 import cn.lwccxy.trip.business.apikey.domain.form.ProviderApiKeyQueryForm;
 import cn.lwccxy.trip.business.apikey.domain.form.ProviderApiKeySaveForm;
@@ -25,7 +26,7 @@ public class ProviderApiKeyService {
     private static final String DEFAULT_STATUS = "ACTIVE";
 
     private final ProviderApiKeyMapper mapper;
-    private final ApiKeyEncryptionService encryptionService;
+    private final AesUtil aesUtil;
 
     /** 分页查询当前用户的服务商凭证，响应中不包含 API Key 密文。 */
     public PageResponse<ProviderApiKeyVO> query(Long userId, ProviderApiKeyQueryForm form) {
@@ -66,6 +67,19 @@ public class ProviderApiKeyService {
                     "The provider API key already exists for this user");
         }
         return Response.success(toVO(entity));
+    }
+
+    /** 按用户和服务商保存凭证，已有记录时覆盖密文并更新状态。 */
+    @Transactional
+    public Response<ProviderApiKeyVO> saveOrUpdate(Long userId, ProviderApiKeySaveForm form) {
+        String providerCode = normalizeProviderCode(form.getProviderCode());
+        ProviderApiKeyEntity existing = mapper.selectOne(new LambdaQueryWrapper<ProviderApiKeyEntity>()
+                .eq(ProviderApiKeyEntity::getUserId, userId)
+                .eq(ProviderApiKeyEntity::getProviderCode, providerCode));
+        if (existing == null) {
+            return create(userId, form);
+        }
+        return update(userId, existing.getId(), form);
     }
 
     /** 加密并更新当前用户拥有的服务商凭证。 */
@@ -109,7 +123,7 @@ public class ProviderApiKeyService {
                 .eq(ProviderApiKeyEntity::getUserId, userId)
                 .eq(ProviderApiKeyEntity::getProviderCode, normalizedProviderCode)
                 .eq(ProviderApiKeyEntity::getStatus, DEFAULT_STATUS));
-        return entity == null ? null : encryptionService.decrypt(entity.getApiKeyCiphertext());
+        return entity == null ? null : aesUtil.decrypt(entity.getApiKeyCiphertext());
     }
 
     /** 将请求参数转换为数据库实体，并在持久化前完成 API Key 加密。 */
@@ -117,7 +131,7 @@ public class ProviderApiKeyService {
         ProviderApiKeyEntity entity = new ProviderApiKeyEntity();
         entity.setUserId(userId);
         entity.setProviderCode(normalizeProviderCode(form.getProviderCode()));
-        entity.setApiKeyCiphertext(encryptionService.encrypt(form.getApiKey().strip()));
+        entity.setApiKeyCiphertext(aesUtil.encrypt(form.getApiKey().strip()));
         entity.setStatus(form.getStatus() == null ? DEFAULT_STATUS : form.getStatus());
         entity.setRemark(normalizeRemark(form.getRemark()));
         entity.setCreatedBy(userId);
