@@ -22,6 +22,10 @@ Thumbs.db
 application-local.yml
 application-local.properties
 
+# 配置目录仅提交公开示例，其余 YAML 作为本地环境配置
+/src/main/resources/config/*.yml
+!/src/main/resources/config/application-example.yml
+
 # 环境变量
 .env
 
