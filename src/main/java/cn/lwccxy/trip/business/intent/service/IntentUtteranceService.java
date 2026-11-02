@@ -155,7 +155,8 @@ public class IntentUtteranceService {
      */
     private boolean isSupportedIntent(String intentCode) {
         return Arrays.stream(IntentType.values())
-                .anyMatch(intentType -> intentType.getTargetIntent().equals(intentCode));
+                .anyMatch(intentType -> intentType != IntentType.CHAT
+                        && intentType.getTargetIntent().equals(intentCode));
     }
 
     /**

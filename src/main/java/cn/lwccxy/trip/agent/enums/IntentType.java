@@ -33,6 +33,8 @@ public enum IntentType {
     /** 处理差旅费用和报销事项。 */
     REIMBURSEMENT("REIMBURSEMENT", "ReimbursementAgent",
             Set.of("报销", "费用报销", "报销材料", "报销清单", "报销进度", "报销凭证", "票据", "发票")),
+    /** 用户仅进行问候等轻量闲聊。 */
+    CHAT("CHAT", "MasterAgent", Set.of()),
     /** 暂未识别的业务意图。 */
     UNKNOWN("UNKNOWN", "MasterAgent", Set.of());
 
