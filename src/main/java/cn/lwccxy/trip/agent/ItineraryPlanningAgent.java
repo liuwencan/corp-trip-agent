@@ -5,6 +5,8 @@ import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
+import cn.lwccxy.trip.agent.hooks.TuniuApiKeyShellHook;
+import cn.lwccxy.trip.agent.hooks.TuniuShellCommandValidator;
 import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
 import cn.lwccxy.trip.agent.tools.ProviderApiKeyTools;
 import io.agentscope.core.ReActAgent;
@@ -45,6 +47,7 @@ public class ItineraryPlanningAgent {
     private final PersistSessionHook persistSessionHook;
     private final ProgressNotificationHook progressNotificationHook;
     private final ModelUsageBillingHook modelUsageBillingHook;
+    private final TuniuApiKeyShellHook tuniuApiKeyShellHook;
     private final McpClientWrapper weatherMcpClient;
     private final List<String> enabledWeatherTools;
     private final DestinationLiveTools destinationLiveTools;
@@ -63,11 +66,13 @@ public class ItineraryPlanningAgent {
                                   @Value("${corp.trip.weather-mcp.enabled-tools:}") List<String> enabledWeatherTools,
                                   DestinationLiveTools destinationLiveTools, AgentSkillRepository agentSkillRepository,
                                   ProviderApiKeyTools providerApiKeyTools,
-                                  ModelUsageBillingHook modelUsageBillingHook) {
+                                  ModelUsageBillingHook modelUsageBillingHook,
+                                  TuniuApiKeyShellHook tuniuApiKeyShellHook) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
         this.progressNotificationHook = progressNotificationHook;
         this.modelUsageBillingHook = modelUsageBillingHook;
+        this.tuniuApiKeyShellHook = tuniuApiKeyShellHook;
         this.weatherMcpClient = weatherMcpClient;
         // 清理配置中的空格和空项，防止它们影响 MCP 工具名精确匹配。
         this.enabledWeatherTools = enabledWeatherTools == null ? List.of() : enabledWeatherTools.stream()
@@ -118,7 +123,8 @@ public class ItineraryPlanningAgent {
                 .toolExecutionConfig(ExecutionConfig.builder()
                         .timeout(Duration.ofMinutes(30)).build()) // 工具执行超时配置
                 .memory(new AutoContextMemory(autoContextConfig, model))
-                .hooks(List.of(persistSessionHook, progressNotificationHook, modelUsageBillingHook))
+                .hooks(List.of(persistSessionHook, tuniuApiKeyShellHook,
+                        progressNotificationHook, modelUsageBillingHook))
                 .build();
     }
 
@@ -132,7 +138,8 @@ public class ItineraryPlanningAgent {
         ShellCommandTool shellTool = new ShellCommandTool(
                 null,
                 Set.of("curl", "npm", "npx", "tuniu", "rgh", "nohup", "sleep", "cat", "grep", "node", "date", "env", "which", "bash", "ls", "mkdir", "source", "echo"),
-                null);
+                null,
+                new TuniuShellCommandValidator());
         skillBox.codeExecution().withShell(shellTool).withRead().withWrite().enable();
         return skillBox;
     }

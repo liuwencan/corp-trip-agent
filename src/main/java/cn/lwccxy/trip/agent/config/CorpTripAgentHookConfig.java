@@ -1,6 +1,7 @@
 package cn.lwccxy.trip.agent.config;
 
 import cn.lwccxy.trip.agent.hooks.ConfirmationHook;
+import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
@@ -20,6 +21,17 @@ public class CorpTripAgentHookConfig {
     public PersistSessionHook persistSessionHook(Session mysqlSession) {
         return new PersistSessionHook(mysqlSession);
     }
+
+    /**
+     * 创建记录模型 Token 用量和估算费用的 Hook。
+     *
+     * @return 模型用量计费 Hook
+     */
+    @Bean
+    public ModelUsageBillingHook modelUsageBillingHook() {
+        return new ModelUsageBillingHook();
+    }
+
     /**
      * 创建用于推送 ask_user 确认请求并持久化工具调用记录的 Hook。
      *

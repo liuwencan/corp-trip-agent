@@ -3,10 +3,12 @@ package cn.lwccxy.trip.agent;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.hooks.ConfirmationHook;
+import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
 import cn.lwccxy.trip.agent.tools.AskUserTool;
+import cn.lwccxy.trip.agent.tools.ProviderApiKeyTools;
 import cn.lwccxy.trip.agent.tools.UserInfoTools;
 import cn.lwccxy.trip.common.util.SpringContextUtil;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
@@ -29,9 +31,13 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.io.ClassPathResource;
 import reactor.core.publisher.Mono;
 
 import javax.sql.DataSource;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -41,6 +47,8 @@ import java.util.Map;
 @Configuration("masterAgentConfiguration")
 public class MasterAgent {
 
+    private static final String MASTER_AGENT_PROMPT_PATH = "sysprompt/MasterAgentPromptV1.md";
+
     private final Logger logger = LoggerFactory.getLogger(MasterAgent.class);
 
     private final SseEmitterRegistry sseEmitterRegistry;
@@ -48,22 +56,46 @@ public class MasterAgent {
     private final Model model;
     private final ApplicationContext applicationContext;
     private final PersistSessionHook persistSessionHook;
+    private final ModelUsageBillingHook modelUsageBillingHook;
     private final McpClientWrapper weatherMcpClient;
     private final ConfirmationHook confirmationHook;
     private final ProgressNotificationHook progressNotificationHook;
+    private final String masterAgentPrompt;
 
     /** 创建主智能体配置。 */
     public MasterAgent(DataSource dataSource, Model model, ApplicationContext applicationContext,
                        SseEmitterRegistry sseEmitterRegistry, PersistSessionHook persistSessionHook,
-                       McpClientWrapper weatherMcpClient, ConfirmationHook confirmationHook, ProgressNotificationHook progressNotificationHook) {
+                       McpClientWrapper weatherMcpClient, ConfirmationHook confirmationHook,
+                       ProgressNotificationHook progressNotificationHook,
+                       ModelUsageBillingHook modelUsageBillingHook) {
         this.dataSource = dataSource;
         this.model = model;
         this.applicationContext = applicationContext;
         this.sseEmitterRegistry = sseEmitterRegistry;
         this.persistSessionHook = persistSessionHook;
+        this.modelUsageBillingHook = modelUsageBillingHook;
         this.weatherMcpClient = weatherMcpClient;
         this.confirmationHook = confirmationHook;
         this.progressNotificationHook = progressNotificationHook;
+        this.masterAgentPrompt = loadMasterAgentPrompt();
+    }
+
+    /**
+     * 从 classpath 读取主 Agent 的版本化系统提示词。
+     *
+     * @return UTF-8 编码的提示词正文
+     */
+    private String loadMasterAgentPrompt() {
+        // 提示词是主 Agent 的核心行为配置，缺失或为空时应阻止使用不完整配置启动。
+        try (InputStream inputStream = new ClassPathResource(MASTER_AGENT_PROMPT_PATH).getInputStream()) {
+            String prompt = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8).trim();
+            if (prompt.isEmpty()) {
+                throw new IllegalStateException("主 Agent 提示词为空: " + MASTER_AGENT_PROMPT_PATH);
+            }
+            return prompt;
+        } catch (IOException exception) {
+            throw new IllegalStateException("无法读取主 Agent 提示词: " + MASTER_AGENT_PROMPT_PATH, exception);
+        }
     }
 
     /** 为每次对话创建隔离的主智能体及其差旅子智能体工具。 */
@@ -76,6 +108,7 @@ public class MasterAgent {
         // 子智能体按工具调用所需任务独立响应，主智能体负责选择和组合它们的结果。
         Toolkit toolkit = new Toolkit();
 
+        // =================== 子智能体装配 ========================
         // 每次Build主智能体的时候都要重Spring上下文中取出对应的子Agent, 这样才能做多租户隔离
         ReActAgent generalInfoAgent = applicationContext.getBean("generalInfoAgent", ReActAgent.class);
         // 行程单管理 Agent 同样按本次会话创建，避免不同会话共享运行时状态。
@@ -105,9 +138,6 @@ public class MasterAgent {
                 .build();
         toolkit.registerAgentTool(new SubAgentTool(() -> itineraryPlanningAgent, itineraryPlanningConfig));
         toolkit.registerTool(new AskUserTool());
-        // 阿里云天气MCP接入
-        // https://market.aliyun.com/detail/cmapi00074002?spm=5176.29867242_210807074.0.0.44e83e7eLgrp1C
-//        toolkit.registerMcpClient(weatherMcpClient).block();
 
         // 工具执行上下文, 后续可以在该Agent的多个Hook机制中去取出这些参数
         ToolExecutionContext context = ToolExecutionContext.builder()
@@ -123,16 +153,11 @@ public class MasterAgent {
                 .name("MasterAgent")
                 .description("负责理解企业差旅请求并协调差旅单、通用信息和行程规划子智能体")
                 .model(model)
-                .sysPrompt("你是企业智能差旅助手主智能体，负责理解请求并协调专业子智能体。"
-                        + "天气、目的地、交通、餐饮、用户信息和差旅政策问题交给 GeneralInfoAgent；"
-                        + "创建出差申请并提交管理员待审批队列、已有申请单和审批记录查询、申请单修改或取消草案交给 TripOrderManagementAgent。"
-                        + "尚未预订的差旅行程规划交给 ItineraryPlanningAgent。开始规划前，必须先调用 GeneralInfoAgent 查询目的地相关信息和行程日期天气；将查询到的目的地特点、天气及来源或时间范围一并交给 ItineraryPlanningAgent，供其形成有依据的出行建议。"
-                        + "若日期或城市信息不足以查询天气，应说明缺少的信息并继续提供明确标注假设的目的地常识建议；不得把常识描述成实时查询结果。ItineraryPlanningAgent 只生成候选建议，没有实时交通、酒店或价格查询能力。"
-                        + "预订请求仍无对应的业务执行智能体，不得声称已查询实时资源、完成审核或完成预订；"
-                        + "申请工具返回 SUBMITTED 和 PENDING 表示已进入管理员审批队列，不表示审批通过。多项独立诉求应逐项处理。")
+                .sysPrompt(masterAgentPrompt)
                 .toolkit(toolkit)
                 .toolExecutionContext(context)
-                .hooks(List.of(new AutoContextHook(), confirmationHook, persistSessionHook, progressNotificationHook))
+                .hooks(List.of(new AutoContextHook(), confirmationHook, persistSessionHook,
+                        progressNotificationHook, modelUsageBillingHook))
                 .memory(new AutoContextMemory(autoContextConfig, model)) // AgentScope的六层上下文压缩机制
                 .build();
 

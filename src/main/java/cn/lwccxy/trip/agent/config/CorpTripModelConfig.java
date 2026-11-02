@@ -2,10 +2,7 @@ package cn.lwccxy.trip.agent.config;
 
 import io.agentscope.core.formatter.dashscope.DashScopeChatFormatter;
 import io.agentscope.core.formatter.openai.DeepSeekFormatter;
-import io.agentscope.core.model.DashScopeChatModel;
-import io.agentscope.core.model.EndpointType;
-import io.agentscope.core.model.Model;
-import io.agentscope.core.model.OpenAIChatModel;
+import io.agentscope.core.model.*;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -31,9 +28,10 @@ public class CorpTripModelConfig {
         Model model =
                 DashScopeChatModel.builder()
                         .apiKey(apiKey)
-                        .modelName("qwen3.8-flash")
+                        .modelName("qwen3.8-27b")
                         .stream(true) // 是否流式输出
                         .endpointType(EndpointType.MULTIMODAL)
+                        .formatter(new DashScopeChatFormatter())
                         .build();
         return model;
     }
@@ -48,7 +46,7 @@ public class CorpTripModelConfig {
         Model model =
                 DashScopeChatModel.builder()
                         .apiKey(apiKey)
-                        .modelName("qwen3.8-flash")
+                        .modelName("qwen3.8-27b")
                         .stream(true) // 是否流式输出
                         .endpointType(EndpointType.MULTIMODAL) // 使用多模态端点
                         .build();

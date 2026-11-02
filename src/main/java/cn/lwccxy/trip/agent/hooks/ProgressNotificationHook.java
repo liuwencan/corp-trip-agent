@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
  */
 public class ProgressNotificationHook implements Hook {
 
+    private static final int HOOK_PRIORITY = 100;
     private static final Logger logger = LoggerFactory.getLogger(ProgressNotificationHook.class);
 
     // Hook 为共享实例，名称映射只读，避免不同会话并发调用时修改共享状态。
@@ -54,6 +55,16 @@ public class ProgressNotificationHook implements Hook {
      */
     public ProgressNotificationHook(SseEmitterRegistry sseEmitterRegistry) {
         this.sseEmitterRegistry = sseEmitterRegistry;
+    }
+
+    /**
+     * 返回默认优先级，使进度通知在凭证注入完成后处理工具调用。
+     *
+     * @return Progress Hook 优先级
+     */
+    @Override
+    public int priority() {
+        return HOOK_PRIORITY;
     }
 
     /**
@@ -161,7 +172,28 @@ public class ProgressNotificationHook implements Hook {
         payload.setToolName(toolUse.getName());
         payload.setTooldesc(describeTool(toolUse.getName()));
         // 入参保持 JSON 对象结构，前端无需再对字符串进行第二次解析。
-        payload.setInput(toolUse.getInput() == null ? Map.of() : toolUse.getInput());
+        payload.setInput(toolUse.getInput() == null ? Map.of() : sanitizeToolInput(toolUse));
+    }
+
+    /**
+     * 脱敏途牛 Shell 命令中的 API Key，避免将进程环境凭证推送到前端。
+     *
+     * @param toolUse Shell 工具调用
+     * @return 可安全推送的工具输入
+     */
+    private Map<String, Object> sanitizeToolInput(ToolUseBlock toolUse) {
+        if (!"execute_shell_command".equals(toolUse.getName())
+                || !(toolUse.getInput().get("command") instanceof String command)
+                || !command.contains("TUNIU_API_KEY=")) {
+            return toolUse.getInput();
+        }
+
+        // 只复制并处理 SSE 展示副本，不修改 AgentScope 实际执行的命令参数。
+        Map<String, Object> sanitizedInput = new java.util.HashMap<>(toolUse.getInput());
+        sanitizedInput.put("command", command
+                .replaceFirst("(?is)(set\\s+\"TUNIU_API_KEY=).*?\"\\s*&&\\s*", "$1[已隐藏]\" && ")
+                .replaceFirst("(?is)(export\\s+TUNIU_API_KEY=).*?;\\s*", "$1'[已隐藏]'; "));
+        return sanitizedInput;
     }
 
     /**

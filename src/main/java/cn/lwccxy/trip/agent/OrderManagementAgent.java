@@ -3,6 +3,7 @@ package cn.lwccxy.trip.agent;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
+import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.tools.TripOrderReadTools;
 import cn.lwccxy.trip.agent.tools.TripOrderWriteTools;
 import io.agentscope.core.ReActAgent;
@@ -23,15 +24,18 @@ public class OrderManagementAgent {
 
     private final Model model;
     private final PersistSessionHook persistSessionHook;
+    private final ModelUsageBillingHook modelUsageBillingHook;
     private final TripOrderReadTools tripOrderReadTools;
     private final TripOrderWriteTools tripOrderWriteTools;
 
     /** 创建行程单管理智能体配置。 */
     public OrderManagementAgent(Model model, PersistSessionHook persistSessionHook,
                                 TripOrderReadTools tripOrderReadTools,
-                                TripOrderWriteTools tripOrderWriteTools) {
+                                TripOrderWriteTools tripOrderWriteTools,
+                                ModelUsageBillingHook modelUsageBillingHook) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
+        this.modelUsageBillingHook = modelUsageBillingHook;
         this.tripOrderReadTools = tripOrderReadTools;
         this.tripOrderWriteTools = tripOrderWriteTools;
     }
@@ -66,7 +70,7 @@ public class OrderManagementAgent {
                 .toolkit(toolkit)
                 .toolExecutionContext(context)
                 .memory(new AutoContextMemory(autoContextConfig, model))
-                .hooks(List.of(persistSessionHook))
+                .hooks(List.of(persistSessionHook, modelUsageBillingHook))
                 .build();
     }
 }
