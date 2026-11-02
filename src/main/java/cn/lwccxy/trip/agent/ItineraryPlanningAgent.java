@@ -3,22 +3,34 @@ package cn.lwccxy.trip.agent;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
+import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
+import cn.lwccxy.trip.agent.tools.ProviderApiKeyTools;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
 import io.agentscope.core.memory.autocontext.AutoContextMemory;
+import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.skill.SkillBox;
 import io.agentscope.core.skill.repository.AgentSkillRepository;
 import io.agentscope.core.tool.ToolExecutionContext;
 import io.agentscope.core.tool.Toolkit;
+import io.agentscope.core.tool.ToolkitConfig;
 import io.agentscope.core.tool.coding.ShellCommandTool;
 import io.agentscope.core.tool.mcp.McpClientWrapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.io.ClassPathResource;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 
@@ -26,24 +38,46 @@ import java.util.Set;
 @Configuration("itineraryPlanningAgentConfiguration")
 public class ItineraryPlanningAgent {
 
+    private static final String PROMPT_RESOURCE_PATH = "sysprompt/ItineraryPlanningAgentPrompt.md";
+    private final Logger logger = LoggerFactory.getLogger(ItineraryPlanningAgent.class);
+
     private final Model model;
     private final PersistSessionHook persistSessionHook;
     private final ProgressNotificationHook progressNotificationHook;
+    private final ModelUsageBillingHook modelUsageBillingHook;
     private final McpClientWrapper weatherMcpClient;
+    private final List<String> enabledWeatherTools;
     private final DestinationLiveTools destinationLiveTools;
+    private final ProviderApiKeyTools providerApiKeyTools;
     private final AgentSkillRepository agentSkillRepository;
+    private final String itineraryPlanningPrompt;
 
 
-    /** 创建行程规划智能体配置。 */
+    /**
+     * 创建行程规划智能体配置。
+     *
+     * @param enabledWeatherTools 配置允许注册的天气 MCP 工具名称
+     */
     public ItineraryPlanningAgent(Model model, PersistSessionHook persistSessionHook,
                                   ProgressNotificationHook progressNotificationHook, McpClientWrapper weatherMcpClient,
-                                  DestinationLiveTools destinationLiveTools, AgentSkillRepository agentSkillRepository) {
+                                  @Value("${corp.trip.weather-mcp.enabled-tools:}") List<String> enabledWeatherTools,
+                                  DestinationLiveTools destinationLiveTools, AgentSkillRepository agentSkillRepository,
+                                  ProviderApiKeyTools providerApiKeyTools,
+                                  ModelUsageBillingHook modelUsageBillingHook) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
         this.progressNotificationHook = progressNotificationHook;
+        this.modelUsageBillingHook = modelUsageBillingHook;
         this.weatherMcpClient = weatherMcpClient;
+        // 清理配置中的空格和空项，防止它们影响 MCP 工具名精确匹配。
+        this.enabledWeatherTools = enabledWeatherTools == null ? List.of() : enabledWeatherTools.stream()
+                .filter(toolName -> toolName != null && !toolName.isBlank())
+                .map(String::trim)
+                .toList();
         this.destinationLiveTools = destinationLiveTools;
+        this.providerApiKeyTools = providerApiKeyTools;
         this.agentSkillRepository = agentSkillRepository;
+        this.itineraryPlanningPrompt = loadPrompt();
     }
 
     /** 为当前业务会话创建隔离的行程规划智能体。 */
@@ -61,10 +95,13 @@ public class ItineraryPlanningAgent {
         Toolkit toolkit = new Toolkit();
         // 提供wttr.in短期天气和NewsData.io目的地资讯查询，补足规划所需的实时参考信息。
         toolkit.registerTool(destinationLiveTools);
-        // 将天气 MCP 直接提供给规划智能体，使其能结合具体行程日期核对天气并调整建议。
-        toolkit.registerMcpClient(weatherMcpClient).block();
-
-
+        toolkit.registerTool(providerApiKeyTools);
+        // 只注册 YAML 白名单中的天气 MCP 工具；空名单时跳过注册，避免空名单退化为全量开放。
+        if (weatherMcpClient != null && !enabledWeatherTools.isEmpty()) {
+            toolkit.registration().mcpClient(weatherMcpClient).enableTools(enabledWeatherTools);
+        } else {
+            logger.warn("[ItineraryPlanningAgent]天气 MCP 客户端未注册，客户端缺失或 corp.trip.weather-mcp.enabled-tools 未配置");
+        }
         // 沙箱
         SkillBox skillBox = buildPlanningSkillBox(toolkit);
 
@@ -74,18 +111,14 @@ public class ItineraryPlanningAgent {
                 .name("ItineraryPlanningAgent")
                 .description("结合目的地咨询和天气信息，根据出差目标与约束生成交通、住宿及日程候选方案，并说明取舍、假设和信息缺口")
                 .model(model)
-                .sysPrompt("你是企业差旅行程规划子智能体，只负责根据用户明确提供的条件生成一个或多个候选方案。"
-                        + "规划前识别出发地、目的地、出发和返回日期、出差目的、人数、预算及偏好；缺少会显著影响方案的条件时，先列出待补充信息，不得自行猜测。"
-                        + "先阅读主智能体提供的目的地咨询和天气查询结果；缺少适用的目的地资讯或天气信息时，调用 query_destination_news 和 query_weather 补充查询。按目的地特点、行程日期天气及差旅目的调整每日安排，并给出穿着、交通衔接、室内外活动取舍等实用建议。天气结果缺失或超出可查询范围时，明确说明未能核实，不得推测天气。"
-                        + "按日期安排交通、住宿和日程，解释路线与时间取舍，并区分已查询事实、目的地常识建议和规划假设。目的地实时信息应以工具查询结果为准，不能把模型常识描述成实时查询。"
-                        + "当前没有交通、酒店、库存或价格查询工具；不得声称查询过实时班次、房态、政策或价格，不得编造供应商、报价、可订状态或来源。"
-                        + "如需预算描述，只能明确标记为未经查询的粗略估算或留待查询，不可当作报价或政策校验结果。"
-                        + "只输出规划建议，不创建申请、预订或修改订单，不占用预算，也不声称已通过政策审核或已完成预订。")
+                .sysPrompt(itineraryPlanningPrompt)
                 .toolkit(toolkit)
                 .skillBox(skillBox)
                 .toolExecutionContext(context)
+                .toolExecutionConfig(ExecutionConfig.builder()
+                        .timeout(Duration.ofMinutes(30)).build()) // 工具执行超时配置
                 .memory(new AutoContextMemory(autoContextConfig, model))
-                .hooks(List.of(persistSessionHook, progressNotificationHook))
+                .hooks(List.of(persistSessionHook, progressNotificationHook, modelUsageBillingHook))
                 .build();
     }
 
@@ -102,5 +135,19 @@ public class ItineraryPlanningAgent {
                 null);
         skillBox.codeExecution().withShell(shellTool).withRead().withWrite().enable();
         return skillBox;
+    }
+
+    /** 从 classpath 加载行程规划系统提示词，并在配置缺失时阻止 Agent 使用空提示词启动。 */
+    private static String loadPrompt() {
+        ClassPathResource resource = new ClassPathResource(PROMPT_RESOURCE_PATH);
+        try (InputStream inputStream = resource.getInputStream()) {
+            String prompt = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8).trim();
+            if (prompt.isEmpty()) {
+                throw new IllegalStateException("行程规划系统提示词不能为空: " + PROMPT_RESOURCE_PATH);
+            }
+            return prompt;
+        } catch (IOException exception) {
+            throw new IllegalStateException("无法加载行程规划系统提示词: " + PROMPT_RESOURCE_PATH, exception);
+        }
     }
 }

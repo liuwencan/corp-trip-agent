@@ -3,6 +3,7 @@ package cn.lwccxy.trip.agent;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
+import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.tools.AskUserTool;
 import cn.lwccxy.trip.agent.tools.UserInfoTools;
@@ -25,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
@@ -44,10 +46,12 @@ public class GeneralInfoAgent {
     private ReActAgent agent;
 //    private final ToolExecuteStoreMiddleware toolExecuteStoreMiddleware;
     private final McpClientWrapper weatherMcpClient;
+    private final List<String> enabledWeatherTools;
     private final Knowledge corptripGuidelinesKnowledge;
     private final Knowledge corptripPolicyKnowledge;
     private final PersistSessionHook persistSessionHook;
     private final ProgressNotificationHook progressNotificationHook;
+    private final ModelUsageBillingHook modelUsageBillingHook;
     private final DestinationLiveTools destinationLiveTools;
 
 
@@ -59,18 +63,27 @@ public class GeneralInfoAgent {
      * @param dataSource 数据源
      * @param model 对话模型
      * @param weatherMcpClient 天气 MCP 客户端
+     * @param enabledWeatherTools 配置允许注册的天气 MCP 工具名称
      */
     public GeneralInfoAgent(DataSource dataSource, Model model, McpClientWrapper weatherMcpClient,
+                            @Value("${corp.trip.weather-mcp.enabled-tools:}") List<String> enabledWeatherTools,
                             @Qualifier("corptripGuidelinesKnowledge") Knowledge corptripGuidelinesKnowledge, @Qualifier("corptripPolicyKnowledge") Knowledge corptripPolicyKnowledge,
                             PersistSessionHook persistSessionHook, ProgressNotificationHook progressNotificationHook,
-                            DestinationLiveTools destinationLiveTools) {
+                            DestinationLiveTools destinationLiveTools,
+                            ModelUsageBillingHook modelUsageBillingHook) {
         this.dataSource = dataSource;
         this.model = model;
         this.weatherMcpClient = weatherMcpClient;
+        // 清理配置中的空格和空项，防止它们影响 MCP 工具名精确匹配。
+        this.enabledWeatherTools = enabledWeatherTools == null ? List.of() : enabledWeatherTools.stream()
+                .filter(toolName -> toolName != null && !toolName.isBlank())
+                .map(String::trim)
+                .toList();
         this.corptripGuidelinesKnowledge = corptripGuidelinesKnowledge;
         this.corptripPolicyKnowledge = corptripPolicyKnowledge;
         this.persistSessionHook = persistSessionHook;
         this.progressNotificationHook = progressNotificationHook;
+        this.modelUsageBillingHook = modelUsageBillingHook;
         this.destinationLiveTools = destinationLiveTools;
     }
 
@@ -94,9 +107,12 @@ public class GeneralInfoAgent {
         // 通用信息查询与行程规划共享同一套目的地天气和最新资讯工具。
         toolkit.registerTool(destinationLiveTools);
 
-        // 阿里云天气MCP接入
-        // https://market.aliyun.com/detail/cmapi00074002?spm=5176.29867242_210807074.0.0.44e83e7eLgrp1C
-        toolkit.registerMcpClient(weatherMcpClient).block();
+        // 只将配置明确允许的天气 MCP 工具注册到 Agent；空配置时跳过注册，避免空名单退化为全量开放。
+        if (weatherMcpClient != null && !enabledWeatherTools.isEmpty()) {
+            toolkit.registration().mcpClient(weatherMcpClient).enableTools(enabledWeatherTools);
+        } else {
+            logger.warn("[GeneralInfoAgent]天气 MCP 客户端未注册，客户端缺失或 corp.trip.weather-mcp.enabled-tools 未配置");
+        }
 
         // AgentScope的六层上下文压缩机制
         AutoContextConfig autoContextConfig = AutoContextConfig.builder()
@@ -120,7 +136,7 @@ public class GeneralInfoAgent {
                 .knowledge(corptripGuidelinesKnowledge).knowledge(corptripPolicyKnowledge) // 添加 差旅政策/差旅指南 知识库d
                 .ragMode(RAGMode.AGENTIC)
                 .memory(new AutoContextMemory(autoContextConfig, model))
-                .hooks(List.of(persistSessionHook, progressNotificationHook))
+                .hooks(List.of(persistSessionHook, progressNotificationHook, modelUsageBillingHook))
                 .build();
     }
 }
