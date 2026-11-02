@@ -10,8 +10,12 @@ import cn.lwccxy.trip.agent.hooks.TuniuShellCommandValidator;
 import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
 import cn.lwccxy.trip.agent.tools.ProviderApiKeyTools;
 import io.agentscope.core.ReActAgent;
+import io.agentscope.core.memory.LongTermMemory;
+import io.agentscope.core.memory.LongTermMemoryMode;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
 import io.agentscope.core.memory.autocontext.AutoContextMemory;
+import io.agentscope.core.memory.mem0.Mem0ApiType;
+import io.agentscope.core.memory.mem0.Mem0LongTermMemory;
 import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.skill.SkillBox;
@@ -109,7 +113,8 @@ public class ItineraryPlanningAgent {
         }
         // 沙箱
         SkillBox skillBox = buildPlanningSkillBox(toolkit);
-
+        // 长期记忆
+        LongTermMemory longTermMemory = createLongTermMemory();
 
         // 规划智能体只组合上游目的地咨询和天气结果，不虚构未接入的交通、酒店或价格数据。
         return ReActAgent.builder()
@@ -125,6 +130,8 @@ public class ItineraryPlanningAgent {
                 .memory(new AutoContextMemory(autoContextConfig, model))
                 .hooks(List.of(persistSessionHook, tuniuApiKeyShellHook,
                         progressNotificationHook, modelUsageBillingHook))
+                .longTermMemory(longTermMemory)
+                .longTermMemoryMode(LongTermMemoryMode.AGENT_CONTROL) // AGENT_CONTROL模式：给Agent提供两个工具（检索/存储）由Agent决定何时调用工具进行存储长期记忆, 以及召回用户长期记忆
                 .build();
     }
 
@@ -156,5 +163,23 @@ public class ItineraryPlanningAgent {
         } catch (IOException exception) {
             throw new IllegalStateException("无法加载行程规划系统提示词: " + PROMPT_RESOURCE_PATH, exception);
         }
+    }
+
+    /**
+     * 使用自建Mem0存储和检索用户长期记忆
+     * 官方文档：https://java.agentscope.io/v1/zh/docs/task/memory#%E8%AE%B0%E5%BF%86%E6%9E%B6%E6%9E%84
+     */
+    public LongTermMemory createLongTermMemory() {
+        AgentRuntimeContext agentRuntimeContext = AgentRuntimeContextHolder.get();
+        String userId = agentRuntimeContext.getUserId();
+
+        // 使用自建 Mem0，需要指定 apiType 为 Mem0ApiType.SELF_HOSTED
+        Mem0LongTermMemory mem0LongTermMemory = Mem0LongTermMemory.builder()
+                .userId(userId) // 多用户隔离
+                .apiBaseUrl("http://localhost:8888")  // 自建 Mem0 服务地址
+                .apiType(Mem0ApiType.SELF_HOSTED)  // 指定为自建 Mem0
+                .build();
+
+        return mem0LongTermMemory;
     }
 }
