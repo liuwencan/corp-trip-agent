@@ -7,8 +7,8 @@ import java.math.RoundingMode;
 import java.util.Objects;
 
 /**
- * 按模型标准输入、输出 Token 单价估算单次调用费用。
- * 价格以人民币元计，适用于文本 Token 标准按量计费，不含缓存优惠及多模态专属价格。
+ * 按模型普通输入和输出 Token 单价估算单次调用费用。
+ * 价格以人民币元计，适用于文本 Token 按量计费，不含缓存和多模态专属价格。
  */
 public final class ModelTokenBillingUtil {
 
@@ -21,7 +21,7 @@ public final class ModelTokenBillingUtil {
     }
 
     /**
-     * 计算一次模型调用的标准 Token 费用。
+     * 按普通输入和输出单价计算一次模型调用费用。
      *
      * @param inputTokens 输入 Token 数量，不得小于零
      * @param outputTokens 输出 Token 数量，不得小于零

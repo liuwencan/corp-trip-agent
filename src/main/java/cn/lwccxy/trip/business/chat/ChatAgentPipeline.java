@@ -25,6 +25,7 @@ import cn.lwccxy.trip.agent.enums.SseEventEnum;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
 import cn.lwccxy.trip.agent.sse.SseEmitterSender;
 import cn.lwccxy.trip.common.util.SpringContextUtil;
+import com.alibaba.fastjson2.JSON;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.agent.Event;
 import io.agentscope.core.agent.EventType;
@@ -34,10 +35,6 @@ import io.agentscope.core.model.ChatResponse;
 import io.agentscope.core.model.ChatUsage;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
-import jakarta.validation.constraints.Size;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,15 +43,14 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import reactor.core.Disposable;
+
 import reactor.core.publisher.Flux;
 import reactor.util.context.Context;
 
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
+
 
 /** 负责执行主智能体流式对话，并将事件推送给调用方。 */
 @Component
@@ -93,7 +89,8 @@ public class ChatAgentPipeline {
 
     /** 为当前用户执行一次会话，先保存用户消息，再通过服务端事件推送智能体响应。 */
     public SseEmitter execute(Long userId, Long conversationId, String question) {
-        logger.info("execute 方法执行");
+        String traceId = UUID.randomUUID().toString();
+        logger.info("[ChatAgentPipeline] execute 方法开始执行, traceId: {}", traceId);
 
         // 1. 问题校验
         validateQuestion(question);
@@ -112,6 +109,7 @@ public class ChatAgentPipeline {
         AgentRuntimeContext agentRuntimeContext = AgentRuntimeContext.build()
                 .sessionId(activeConversationId.toString())
                 .userId(userId.toString())
+                .traceId(traceId)
                 .builder();
         // 将Agent运行期间上下文放到ThreadLocal里面, 用于传递到Agent的构建中
         // 因为Agent是多例模式, 每次通过applicationContext.get()方法获取其实都是创建一个新的对象
@@ -120,8 +118,6 @@ public class ChatAgentPipeline {
         // ============ 意图识别 =============
         // 在构建 prototype MasterAgent 前完成识别，使本轮 Agent 能拿到稳定的路由提示。
         IntentRecognizer.IntentRecognitionResult intentResult = intentRecognition(question, intentHistory);
-
-        String traceId = UUID.randomUUID().toString();
 
         StringBuilder answer = new StringBuilder();
         AtomicBoolean receivedFinalResult = new AtomicBoolean();
@@ -141,13 +137,16 @@ public class ChatAgentPipeline {
                 .role(MsgRole.USER)
                 .textContent(question)
                 .build();
+        List<Msg> inputMsgs = new ArrayList<>();
+        inputMsgs.add(userMsg);
+        buildMasterAgentMsgs(inputMsgs, intentResult);
 
         // 记录首Token时长：以提交 Agent 流请求的时刻为起点，统计首个可见文本 Token 的端到端等待时长。
         long agentStartNanos = System.nanoTime();
         AtomicBoolean firstTokenRecorded = new AtomicBoolean();
 
         // 将识别结果作为一次性系统消息传给主 Agent，原始用户消息仍单独保留，避免改写用户语义或污染历史。
-        Flux<Event> events = masterAgent.stream(buildAgentMessages(userMsg, intentResult), StreamOptions.defaults());
+        Flux<Event> events = masterAgent.stream(inputMsgs, StreamOptions.defaults());
         events.subscribe(event -> {
             if (terminal.get()) {
                 return;
@@ -200,7 +199,16 @@ public class ChatAgentPipeline {
 
                 // 仅在收到合法的最终 assistant 结果后落库并发送完成事件。
                 append(userId, activeConversationId, MessageRole.ASSISTANT, resultText, modelName());
-                sendEvent(emitter, SseEventEnum.COMPLETE, Map.of("conversationId", activeConversationId));
+                // 完成事件回传意图识别阶段生成的问题改写；Map 可保留未改写时的 null 值。
+                Map<String, Object> completePayload = new LinkedHashMap<>();
+                completePayload.put("conversationId", activeConversationId);
+                completePayload.put("intents", toIntentPayload(intentResult));
+                completePayload.put("isMultiIntent", intentResult != null && intentResult.multiIntent());
+                completePayload.put("rewrittenQuestion",
+                        intentResult == null ? null : intentResult.rewrittenQuestion());
+                completePayload.put("rewriteReason",
+                        intentResult == null ? null : intentResult.rewriteReason());
+                sendEvent(emitter, SseEventEnum.COMPLETE, completePayload);
                 emitter.complete();
             }
         }, throwable -> {
@@ -217,6 +225,31 @@ public class ChatAgentPipeline {
         }, Context.of("agentRuntimeContext", agentRuntimeContext));
 
         return emitter;
+    }
+
+    /**
+     * 在用户消息后分别追加意图识别结果和问题改写结果系统消息。
+     *
+     * @param inputMsgs 本轮发送给主 Agent 的消息列表，用户消息应已先行加入
+     * @param intentResult 意图识别结果；为空时按未知意图处理
+     */
+    private void buildMasterAgentMsgs(List<Msg> inputMsgs,
+                                     IntentRecognizer.IntentRecognitionResult intentResult) {
+        RecognitionLevel level = intentResult == null || intentResult.level() == null
+                ? RecognitionLevel.NONE : intentResult.level();
+        boolean multiIntent = intentResult != null && intentResult.multiIntent();
+
+        // 意图识别与查询改写分别使用独立消息；意图消息用 JSON 保留多意图边界。
+        inputMsgs.add(Msg.builder()
+                .role(MsgRole.SYSTEM)
+                .textContent("意图识别结果（仅作路由参考）：" + JSON.toJSONString(Map.of(
+                        "intents", toIntentPayload(intentResult),
+                        "isMultiIntent", multiIntent)))
+                .build());
+        inputMsgs.add(Msg.builder()
+                .role(MsgRole.SYSTEM)
+                .textContent("查询改写结果（JSON）：" + JSON.toJSONString(toRewritePayload(intentResult)))
+                .build());
     }
 
     /**
@@ -251,13 +284,13 @@ public class ChatAgentPipeline {
         try {
             IntentRecognizer.IntentRecognitionResult result = intentRecognizer.recognize(question, history);
             long costMs = (System.nanoTime() - startNanos) / 1_000_000;
-            IntentType intentType = result == null || result.intentType() == null
-                    ? IntentType.UNKNOWN : result.intentType();
             RecognitionLevel level = result == null || result.level() == null
                     ? RecognitionLevel.NONE : result.level();
             boolean multiIntent = result != null && result.multiIntent();
-            logger.info("[ChatAgentPipeline意图编排] 层级={}, 意图={}, 目标Agent={}, 多意图={}, 耗时={}ms",
-                    level, intentType, intentType.getTargetAgent(), multiIntent, costMs);
+            logger.info("[ChatAgentPipeline意图编排] 层级={}, 意图列表={}, 多意图={}, 改写问题={}, 改写原因={}, 耗时={}ms",
+                    level, toIntentPayload(result), multiIntent,
+                    result == null ? null : result.rewrittenQuestion(),
+                    result == null ? null : result.rewriteReason(), costMs);
             return result == null
                     ? new IntentRecognizer.RecognitionResultL3(false, IntentType.UNKNOWN)
                     : result;
@@ -267,6 +300,37 @@ public class ChatAgentPipeline {
                     costMs, exception);
             return new IntentRecognizer.RecognitionResultL3(false, IntentType.UNKNOWN);
         }
+    }
+
+    /**
+     * 将识别结果转换为按识别顺序排列的意图编码列表。
+     *
+     * @param intentResult 意图识别结果
+     * @return 按识别顺序排列的意图编码列表
+     */
+    private List<String> toIntentPayload(
+            IntentRecognizer.IntentRecognitionResult intentResult) {
+        if (intentResult == null || intentResult.intents() == null) {
+            return List.of();
+        }
+        return intentResult.intents().stream()
+                .map(intent -> intent.originalIntent().getTargetIntent())
+                .toList();
+    }
+
+    /**
+     * 将改写问题与改写原因转换为应用层统一传递的字段结构。
+     *
+     * @param intentResult 意图识别结果
+     * @return 包含改写问题和原因的映射；未改写时两个字段均为空
+     */
+    private Map<String, String> toRewritePayload(
+            IntentRecognizer.IntentRecognitionResult intentResult) {
+        Map<String, String> rewritePayload = new LinkedHashMap<>();
+        rewritePayload.put("rewrittenQuestion",
+                intentResult == null ? null : intentResult.rewrittenQuestion());
+        rewritePayload.put("reason", intentResult == null ? null : intentResult.rewriteReason());
+        return rewritePayload;
     }
 
     /**
@@ -527,16 +591,16 @@ public class ChatAgentPipeline {
                 .content(resumeToolMsg)
                 .build();
 
-        // 构建运行时上下文并沿用会话已有的 AgentScope session。
+        String traceId = UUID.randomUUID().toString();
+        // 构建运行时上下文并沿用会话已有的 AgentScope session，同时关联本次恢复请求的 traceId。
         AgentRuntimeContext agentRuntimeContext = AgentRuntimeContext.build()
                 .sessionId(conversationId.toString())
                 .userId(userId.toString())
+                .traceId(traceId)
                 .builder();
         // 将Agent运行期间上下文放到ThreadLocal里面, 用于传递到Agent的构建中
         // 因为Agent是多例模式, 每次通过applicationContext.get()方法获取其实都是创建一个新的对象
         AgentRuntimeContextHolder.set(agentRuntimeContext);
-
-        String traceId = UUID.randomUUID().toString();
 
         StringBuilder answer = new StringBuilder();
         AtomicBoolean receivedFinalResult = new AtomicBoolean();

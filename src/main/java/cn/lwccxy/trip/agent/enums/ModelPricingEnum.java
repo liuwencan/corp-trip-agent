@@ -3,13 +3,16 @@ package cn.lwccxy.trip.agent.enums;
 import java.math.BigDecimal;
 
 /**
- * 项目使用的生成模型及其标准文本 Token 单价。
- * 单价以人民币元/百万 Token 计，依据千问官方模型页维护：https://www.qianwenai.com/models/qwen3.8-flash。
+ * 项目使用的生成模型及其文本 Token 单价。
+ * 单价以人民币元/百万 Token 计，依据模型服务商价格维护。
  */
 public enum ModelPricingEnum {
 
     /** 当前项目对话和标题生成使用的千问 3.8 Flash 模型。 */
-    QWEN_3_8_FLASH("qwen3.8-flash", new BigDecimal("0.8"), new BigDecimal("2.7"), "千问 3.8 Flash");
+    QWEN_3_8_FLASH("qwen3.8-flash", new BigDecimal("0.8"), new BigDecimal("2.7"), "千问 3.8 Flash"),
+    /** 当前项目配置的千问 3.8 Max 模型，按普通输入和输出 Token 计价。 */
+    QWEN_3_8_MAX_0902("qwen3.8-max-0902", new BigDecimal("12"), new BigDecimal("36"),
+            "千问 3.8 Max 0902");
 
     private static final BigDecimal TOKENS_PER_MILLION = new BigDecimal("1000000");
 

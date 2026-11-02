@@ -9,10 +9,13 @@ public class AgentRuntimeContext {
     private volatile String userId;
     // 会话ID
     private volatile String sessionId;
+    // 链路追踪ID
+    private volatile String traceId;
 
-    public AgentRuntimeContext(String userId, String sessionId){
+    public AgentRuntimeContext(String userId, String sessionId, String traceId){
         this.userId = userId;
         this.sessionId = sessionId;
+        this.traceId = traceId;
     }
 
     // ================= 建造者模式 ==================
@@ -24,6 +27,10 @@ public class AgentRuntimeContext {
         return userId;
     }
 
+    public String getTraceId() {
+        return traceId;
+    }
+
     public String getSessionId() {
         return sessionId;
     }
@@ -32,6 +39,7 @@ public class AgentRuntimeContext {
 
         private String userId;
         private String sessionId;
+        private String traceId;
 
         public Builder userId(String userId){
             this.userId = userId;
@@ -43,9 +51,13 @@ public class AgentRuntimeContext {
             return this;
         }
 
+        public Builder traceId(String traceId){
+            this.traceId = traceId;
+            return this;
+        }
+
         public AgentRuntimeContext builder(){
-            AgentRuntimeContext agentRuntimeContext = new AgentRuntimeContext(userId, sessionId);
-            return agentRuntimeContext;
+            return new AgentRuntimeContext(userId, sessionId, traceId);
         }
     }
 
