@@ -74,6 +74,14 @@ logging:
 # 项目自定义配置
 corp:
   trip:
+    bailian:
+      dashscope-api: xxx # 记得改成你自己的
+      # 百炼记忆库 ID
+      memory-library-id: xxx # 记得改成你自己的
+      access-key-id: xxx # 记得改成你自己的
+      access-key-secret: xxx # 记得改成你自己的
+      workspace-id: llm-xxx # 记得改成你自己的
+      index-id: xxx # 记得改成你自己的
     # 请在本地配置文件或环境变量中配置新闻服务 API Key，不要提交真实密钥。
     news-api-key: xxx
     skillspath: classpath:skills
