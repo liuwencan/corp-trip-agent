@@ -18,16 +18,16 @@
 
 ```bash
 # 搜索（第一页）
-tuniu call hotel tuniuHotelSearch --source <source> -a '{"cityName":"北京","checkIn":"2026-10-01","checkOut":"2026-10-03"}'
+tuniu call hotel tuniuHotelSearch -a '{"cityName":"北京","checkIn":"2026-10-01","checkOut":"2026-10-03"}'
 
 # 翻页（须用首次搜索返回的 queryId）
-tuniu call hotel tuniuHotelSearch --source <source> -a '{"queryId":"xxx","pageNum":2}'
+tuniu call hotel tuniuHotelSearch -a '{"queryId":"xxx","pageNum":2}'
 
 # 详情（hotelId 或 hotelName 二选一）
-tuniu call hotel tuniuHotelDetail --source <source> -a '{"hotelId":12345,"checkIn":"2026-10-01","checkOut":"2026-10-03"}'
+tuniu call hotel tuniuHotelDetail -a '{"hotelId":12345,"checkIn":"2026-10-01","checkOut":"2026-10-03"}'
 
 # 下单（须 preBookParam，来自 tuniuHotelDetail）
-tuniu call hotel tuniuHotelCreateOrder --source <source> -a '{"hotelId":"xxx","roomId":"xxx","preBookParam":"xxx","checkInDate":"2026-10-01","checkOutDate":"2026-10-03","roomCount":1,"roomGuests":[{"guests":[{"firstName":"三","lastName":"张"}]}],"contactName":"张三","contactPhone":"13800138000"}'
+tuniu call hotel tuniuHotelCreateOrder -a '{"hotelId":"xxx","roomId":"xxx","preBookParam":"xxx","checkInDate":"2026-10-01","checkOutDate":"2026-10-03","roomCount":1,"roomGuests":[{"guests":[{"firstName":"三","lastName":"张"}]}],"contactName":"张三","contactPhone":"13800138000"}'
 ```
 
 ## 独有规则
@@ -41,5 +41,5 @@ tuniu call hotel tuniuHotelCreateOrder --source <source> -a '{"hotelId":"xxx","r
 **用户**：北京3月1号入住一晚，有什么酒店？
 
 ```bash
-tuniu call hotel tuniuHotelSearch --source <source> -a '{"cityName":"北京","checkIn":"2026-10-01","checkOut":"2026-10-02"}'
+tuniu call hotel tuniuHotelSearch -a '{"cityName":"北京","checkIn":"2026-10-01","checkOut":"2026-10-02"}'
 ```

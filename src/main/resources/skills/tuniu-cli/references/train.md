@@ -18,19 +18,19 @@
 
 ```bash
 # 搜索（searchType 5=按票价升序，默认）
-tuniu call train searchLowestPriceTrain --source <source> -a '{"departureCityName":"南京","arrivalCityName":"上海","departureDate":"2026-10-20","searchType":"5"}'
+tuniu call train searchLowestPriceTrain -a '{"departureCityName":"南京","arrivalCityName":"上海","departureDate":"2026-10-20","searchType":"5"}'
 
 # 翻页（须 queryId + pageNum）
-tuniu call train searchLowestPriceTrain --source <source> -a '{"queryId":"xxx","pageNum":2}'
+tuniu call train searchLowestPriceTrain -a '{"queryId":"xxx","pageNum":2}'
 
 # 车次详情（返回 resId、price、departsDate）
-tuniu call train queryTrainDetail --source <source> -a '{"departureStationName":"南京南","arrivalStationName":"上海虹桥","departureDate":"2026-10-20","trainNum":"G203"}'
+tuniu call train queryTrainDetail -a '{"departureStationName":"南京南","arrivalStationName":"上海虹桥","departureDate":"2026-10-20","trainNum":"G203"}'
 
 # 下单
-tuniu call train bookTrain --source <source> -a '{"acceptStandingTicket":false,"adultTourists":[{"name":"张三","psptId":"310101199001011234","psptType":1,"isStuDisabledArmyPolice":0,"tel":"13800138000"}],"contact":{"tel":"13800138000"},"resources":[{"resourceId":2121337089,"adultPrice":141.0,"departsDate":"2026-10-20"}]}'
+tuniu call train bookTrain -a '{"acceptStandingTicket":false,"adultTourists":[{"name":"张三","psptId":"310101199001011234","psptType":1,"isStuDisabledArmyPolice":0,"tel":"13800138000"}],"contact":{"tel":"13800138000"},"resources":[{"resourceId":2121337089,"adultPrice":141.0,"departsDate":"2026-10-20"}]}'
 
 # 取消
-tuniu call train cancelOrder --source <source> -a '{"orderId":"订单号"}'
+tuniu call train cancelOrder -a '{"orderId":"订单号"}'
 ```
 
 ## 独有规则
@@ -44,5 +44,5 @@ tuniu call train cancelOrder --source <source> -a '{"orderId":"订单号"}'
 **用户**：3月20号南京到上海的火车票
 
 ```bash
-tuniu call train searchLowestPriceTrain --source <source> -a '{"departureCityName":"南京","arrivalCityName":"上海","departureDate":"2026-10-20"}'
+tuniu call train searchLowestPriceTrain -a '{"departureCityName":"南京","arrivalCityName":"上海","departureDate":"2026-10-20"}'
 ```

@@ -18,22 +18,22 @@
 
 ```bash
 # 搜索（默认低价）
-tuniu call flight searchLowestPriceFlight --source <source> -a '{"departureCityName":"北京","arrivalCityName":"上海","departureDate":"2026-10-15"}'
+tuniu call flight searchLowestPriceFlight -a '{"departureCityName":"北京","arrivalCityName":"上海","departureDate":"2026-10-15"}'
 
 # 翻页：相同城市日期 + pageNum
-tuniu call flight searchLowestPriceFlight --source <source> -a '{"departureCityName":"北京","arrivalCityName":"上海","departureDate":"2026-10-15","pageNum":2}'
+tuniu call flight searchLowestPriceFlight -a '{"departureCityName":"北京","arrivalCityName":"上海","departureDate":"2026-10-15","pageNum":2}'
 
 # 舱位详情（需 flightNo）
-tuniu call flight multiCabinDetails --source <source> -a '{"departureCityName":"北京","arrivalCityName":"上海","departureDate":"2026-10-15","flightNo":"MU5101"}'
+tuniu call flight multiCabinDetails -a '{"departureCityName":"北京","arrivalCityName":"上海","departureDate":"2026-10-15","flightNo":"MU5101"}'
 
 # 预订说明（下单前必调，server 必须是 flight）
-tuniu call flight getBookingRequiredInfo --source <source> -a '{}'
+tuniu call flight getBookingRequiredInfo -a '{}'
 
 # 下单（需 cabinPriceId，来自 multiCabinDetails）
-tuniu call flight saveOrder --source <source> -a '{"departureCityName":"北京","arrivalCityName":"上海","departureDate":"2026-10-15","flightNo":"MU5101","cabinPriceId":"xxx","tourists":[{"name":"张三","idType":"身份证","idNumber":"310101199001011234","mobile":"13800138000"}],"contactTourist":{"name":"张三","mobile":"13800138000"}}'
+tuniu call flight saveOrder -a '{"departureCityName":"北京","arrivalCityName":"上海","departureDate":"2026-10-15","flightNo":"MU5101","cabinPriceId":"xxx","tourists":[{"name":"张三","idType":"身份证","idNumber":"310101199001011234","mobile":"13800138000"}],"contactTourist":{"name":"张三","mobile":"13800138000"}}'
 
 # 取消
-tuniu call flight cancelOrder --source <source> -a '{"orderId":"订单号"}'
+tuniu call flight cancelOrder -a '{"orderId":"订单号"}'
 ```
 
 ## 独有规则
@@ -48,11 +48,11 @@ tuniu call flight cancelOrder --source <source> -a '{"orderId":"订单号"}'
 **用户**：3月15号北京到上海的航班
 
 ```bash
-tuniu call flight searchLowestPriceFlight --source <source> -a '{"departureCityName":"北京","arrivalCityName":"上海","departureDate":"2026-10-15"}'
+tuniu call flight searchLowestPriceFlight -a '{"departureCityName":"北京","arrivalCityName":"上海","departureDate":"2026-10-15"}'
 ```
 
 **用户**：看一下 MU5101 这个航班的舱位
 
 ```bash
-tuniu call flight multiCabinDetails --source <source> -a '{"departureCityName":"北京","arrivalCityName":"上海","departureDate":"2026-10-15","flightNo":"MU5101"}'
+tuniu call flight multiCabinDetails -a '{"departureCityName":"北京","arrivalCityName":"上海","departureDate":"2026-10-15","flightNo":"MU5101"}'
 ```

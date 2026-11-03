@@ -20,22 +20,22 @@
 
 ```bash
 # 搜索（单人须显式 adult_count=1，默认 2）
-tuniu call intelflight list_intel_flights --source <source> -a '{"departure_city":"北京","arrival_city":"东京","departure_date":"2026-11-15","adult_count":1}'
+tuniu call intelflight list_intel_flights -a '{"departure_city":"北京","arrival_city":"东京","departure_date":"2026-11-15","adult_count":1}'
 
 # 翻页：保持除 page_num 外条件不变
-tuniu call intelflight list_intel_flights --source <source> -a '{"departure_city":"北京","arrival_city":"东京","departure_date":"2026-11-15","adult_count":1,"page_num":2}'
+tuniu call intelflight list_intel_flights -a '{"departure_city":"北京","arrival_city":"东京","departure_date":"2026-11-15","adult_count":1,"page_num":2}'
 
 # 舱位详情
-tuniu call intelflight get_intel_flight_details --source <source> -a '{"flight_no":"UO235-UO652","departure_city":"北京","arrival_city":"东京","departure_date":"2026-11-15"}'
+tuniu call intelflight get_intel_flight_details -a '{"flight_no":"UO235-UO652","departure_city":"北京","arrival_city":"东京","departure_date":"2026-11-15"}'
 
 # 预订说明（server 必须是 intelflight）
-tuniu call intelflight getBookingRequiredInfo --source <source> -a '{}'
+tuniu call intelflight getBookingRequiredInfo -a '{}'
 
 # 下单
-tuniu call intelflight create_intel_flight_order --source <source> -a '{"query_id":"...","flight_nos":"UO235-UO652","cabin_codes":"T-T","vendor_id":95,"expand_price_id":"UO235_T#UO652_T#","category_code":"2000","tourists":[{"surname":"ZHANG","given_name":"SAN","pspt_type":2,"pspt_id":"E12345678","sex":"男","country":"中国","birthday":"1990-01-15","pspt_end_date":"2030-01-15"}],"contact":{"phone_area_code":"0086","phone":"13800138000","email":"zhangsan@example.com","name":"张三"}}'
+tuniu call intelflight create_intel_flight_order -a '{"query_id":"...","flight_nos":"UO235-UO652","cabin_codes":"T-T","vendor_id":95,"expand_price_id":"UO235_T#UO652_T#","category_code":"2000","tourists":[{"surname":"ZHANG","given_name":"SAN","pspt_type":2,"pspt_id":"E12345678","sex":"男","country":"中国","birthday":"1990-01-15","pspt_end_date":"2030-01-15"}],"contact":{"phone_area_code":"0086","phone":"13800138000","email":"zhangsan@example.com","name":"张三"}}'
 
 # 取消（须用户明确确认后才调用）
-tuniu call intelflight cancel_intel_flight_order --source <source> -a '{"order_id":"ORD20260815001","cancel_reason":"重选航程"}'
+tuniu call intelflight cancel_intel_flight_order -a '{"order_id":"ORD20260815001","cancel_reason":"重选航程"}'
 ```
 
 ## 独有规则
@@ -70,11 +70,11 @@ tuniu call intelflight cancel_intel_flight_order --source <source> -a '{"order_i
 **用户**：8月15号北京到东京的机票，就我一个人
 
 ```bash
-tuniu call intelflight list_intel_flights --source <source> -a '{"departure_city":"北京","arrival_city":"东京","departure_date":"2026-11-15","adult_count":1}'
+tuniu call intelflight list_intel_flights -a '{"departure_city":"北京","arrival_city":"东京","departure_date":"2026-11-15","adult_count":1}'
 ```
 
 **用户**：看一下 UO235-UO652 的舱位
 
 ```bash
-tuniu call intelflight get_intel_flight_details --source <source> -a '{"flight_no":"UO235-UO652","departure_city":"北京","arrival_city":"东京","departure_date":"2026-11-15"}'
+tuniu call intelflight get_intel_flight_details -a '{"flight_no":"UO235-UO652","departure_city":"北京","arrival_city":"东京","departure_date":"2026-11-15"}'
 ```

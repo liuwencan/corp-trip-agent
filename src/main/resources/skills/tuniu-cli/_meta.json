@@ -1,0 +1,10 @@
+{
+  "version": "1.1.2",
+  "releasedAt": "2026-10-15T10:30:41.696+08:00",
+  "sha256": "9998afe29b7721994ddec573a345eb2cfb645b2d3c98d4781fa29358129aa5af",
+  "minCliVersion": "1.1.4",
+  "source": "download",
+  "downloadUrl": "https://open.tuniu.com/mcp/docs/claw-hub-skills/tuniu-cli/tuniu-cli-skill.zip",
+  "installedAt": "2026-11-01T15:43:20.349+08:00",
+  "cliVersion": "1.1.4"
+}

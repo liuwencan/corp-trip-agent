@@ -1,16 +1,16 @@
 ---
 name: tuniu-cli
-description: 途牛旅行统一助手（推荐优先使用）- 通过 tuniu CLI 调用国内/国际机票、酒店、门票、火车票、邮轮、度假产品、打包订等 C 端旅行服务。适用于查航班、订酒店、门票、火车票、邮轮、跟团/自助/自驾等度假产品，以及机酒/酒火等组合预订。机票、酒店、度假与打包订的分流与降级规则见正文「意图分流决策表」及 references/，调用前必须遵循。【优先级】若同时安装了 tuniu-flight/tuniu-hotel/tuniu-ticket 等单独服务 skill，请优先使用本 skill。
+description: 企业差旅助手，通过 tuniu CLI 查询和预订酒店住宿、国内/国际航班及火车票（含高铁、动车）。调用前按 references/ 中对应服务说明确认工具名和参数。
 version: 1.1.2
 minCliVersion: 1.1.4
-metadata: {"openclaw": {"emoji": "🧳", "category": "travel", "tags": ["途牛", "旅行", "机票", "国际机票", "酒店", "门票", "火车票", "邮轮", "预订", "度假", "打包订", "机酒"], "priority": 100, "requires": {"bins": ["node", "npm", "tuniu"], "node": ">=18.0.0"}, "env": {"TUNIU_AUTH_SOURCE": {"type": "string", "description": "OAuth 接入源：tuniu-cli / workbuddy / doubao；平台注入时优先使用", "required": false}, "TUNIU_API_KEY": {"type": "string", "description": "普通服务 API Key 兜底凭证", "required": false}}}}
+metadata: {"openclaw": {"emoji": "🧳", "category": "travel", "tags": ["途牛", "企业差旅", "机票", "国际机票", "酒店", "火车票", "高铁", "动车", "预订"], "priority": 100, "requires": {"bins": ["node", "npm", "tuniu"], "node": ">=18.0.0"}, "env": {"TUNIU_API_KEY": {"type": "string", "description": "由项目 Hook 按当前用户注入的 API Key", "required": false}}}}
 ---
 
 # 途牛旅行助手
 
 > **首次调用任一服务前，必须先 Read `references/<server>.md` 确认工具名与参数，禁止凭记忆拼写工具名。** 下单/取消、参数不确定或工具报错时同样必须先读该 reference。若文件不存在，改用 `tuniu schema <server> -o json`，必要时再 `tuniu help <server> <tool>`。
 
-当用户询问航班、酒店、门票、火车票、邮轮、度假产品、打包订等旅行服务时，通过 **tuniu CLI** 调用途牛服务。
+仅处理企业差旅相关的酒店住宿、国内/国际航班和火车票（含高铁、动车），通过 **tuniu CLI** 调用对应服务。其他旅行产品需求不属于本 skill 的处理范围，不调用或发现相关服务。
 
 ## 意图分流决策表
 
@@ -35,25 +35,13 @@ metadata: {"openclaw": {"emoji": "🧳", "category": "travel", "tags": ["途牛"
 4. 列表无 `intelflight` 时 → `tuniu discovery refresh && tuniu discovery list`。
 5. **往返、多城按每一航段独立判断**；单次 `tuniu call` 只能选一个 server。
 
-### 度假产品 / 打包订：意图识别
-
-| 能力 | 用户要什么 | 参考文件 | 首选工具 |
-|------|------------|----------|----------|
-| `holiday` | 买已上架成品线路（产品、团期） | `references/holiday.md` | `searchHolidayList` |
-| `package-booking` | 机票/火车/酒店/门票中**至少两类**自由组合 | `references/package-booking.md` | `package_booking_create` |
-| 单品服务 | 只查/只订一类资源 | 对应 `references/<server>.md` | 见该服务 |
-
-**判定顺序（命中即停）**：① 明确要产品/线路/团期 → `holiday`；② 明确至少两类资源组合 → `package-booking`，首调 `package_booking_create`（确认后才 `submit`）；③ 只一类资源 → 单品服务；④ 意图不清（如「想去三亚玩」）→ 先问一句，不要默认调 `holiday` 或 `package-booking`。
-
 ### 用户说什么 → 用什么服务
 
-国内 / 国际机票、度假 / 打包订的分流与降级规则见上文对应章节。其余意图按下表：
+酒店和国内 / 国际机票按上文分流；火车票、高铁和动车使用下表：
 
 | 用户意图 | server | 参考文件 | 首选工具 |
 |----------|--------|----------|----------|
-| 门票/景点门票 | `ticket` | `references/ticket.md` | `query_cheapest_tickets` |
 | 火车票/高铁/动车 | `train` | `references/train.md` | `searchLowestPriceTrain` |
-| 邮轮/游轮 | `cruise` | `references/cruise.md` | `searchCruiseList` |
 
 ## 环境自检
 
@@ -68,50 +56,23 @@ tuniu --version   # 须 >= 头部 minCliVersion；不足则 tuniu update
 
 ## 认证与 API Key 安全
 
-优先使用 OAuth；OAuth 不可用时可用 `TUNIU_API_KEY` 兜底。
-
-### OAuth 接入源（source）
-
-各宿主 OAuth token **互相隔离**；`auth` / `call` / `help` / `list` / `schema` / `health`等需凭证命令须同源，否则出现「已登录但仍提示未授权」。
-
-本宿主自行判断 source：WorkBuddy→`workbuddy`，豆包→`doubao`，其他 Agent / 普通终端→`tuniu-cli`。CLI 解析优先级：`--source` > `TUNIU_AUTH_SOURCE` > `auth use` 持久化 > 默认 `tuniu-cli`。
-
-**会话首次业务调用前必须、且只需执行一次**只读检查 `tuniu auth use --show`；对齐完成后不要每条命令重复检查。按 `resolved_source`（实际生效值）与 `source_resolution`（`env` / `config` / `default`）处理：
-
-| `source_resolution` | 条件 | 动作 |
-|---|---|---|
-| 任意 | 已是本宿主 | 不写 `auth use`；后续可省略 `--source` |
-| `config` | 指向其他宿主残留 | `tuniu auth use <本宿主source>` 修正一次即可；禁止每会话无条件写（会改整机默认） |
-| `env` | 值非本宿主 | **不要** `auth use`（盖不过 env）；本会话全程显式 `--source` |
-| `default` | 本宿主非 `tuniu-cli` | `auth use <本宿主source>`，或全程显式 `--source` |
-
-修正后按当前 source 检查授权：`tuniu auth status --source <source>`；未授权则 `tuniu auth login --source <source>`（WorkBuddy 等会结束 auth 子进程的宿主必须加 `--daemon`，拿到授权 URL 后能打开浏览器则直接打开，不要只贴链接等用户复制）；业务调用保持同一 source。
-
-### API Key 兜底
-
-OAuth 不可用时可用 `TUNIU_API_KEY`：
-
-```bash
-export TUNIU_API_KEY=your_api_key
-```
+业务鉴权统一使用 `TUNIU_API_KEY`，由项目 Hook 根据当前用户注入，实现多用户鉴权。调用 skill 中的 CLI 命令时照常使用，不要尝试 OAuth 登录，也不要自行查询、设置、传递或拼接 API Key、Token 等凭证参数；Hook 会负责工具拦截与注入。
 
 ### 凭证安全约束
 
-- 已配置凭证时直接调用，不要要求用户重复提供；认证失败（退出码 104、108–112）按退出码表处理：优先确认 source 并重新 OAuth 登录，API Key 兜底失败时提示更新 Key。
-- **不要明文复述密钥**；确认时仅可用后四位等脱敏形式（如 `****abcd`）。
-- 不要代替用户执行含完整密钥的命令；持久化由用户在本地终端自行设置。
-- 配置文件 `~/.tuniu-mcp/config.json` 仅作最后兜底，须 `chmod 600`。
+- 不读取、展示、记录或要求用户提供 API Key；不要把密钥写入命令、参数、日志或回复。
+- 认证失败时停止当前调用并说明鉴权失败，交由项目 Hook / 服务配置检查；不要改用 OAuth、不要提示用户在 CLI 中配置 API Key，也不要反复重试。
 
 ## 基本命令
 
 ### 业务调用
 
 ```bash
-tuniu call <server> <tool> --source <source> -a '<JSON参数>'
-tuniu list [server] --source <source>              # 列出服务/工具（列工具时需同源）
-tuniu help <server> [<tool>] --source <source>     # 查看参数说明（调用前不确定参数时必用）
-tuniu schema [server] --source <source>            # 导出工具 Schema（可加 -o json）；references 缺失时必用
-tuniu health [server] --source <source>            # 健康检查
+tuniu call <server> <tool> -a '<JSON参数>'
+tuniu list [server]                                # 列出服务/工具
+tuniu help <server> [<tool>]                       # 查看参数说明（调用前不确定参数时必用）
+tuniu schema [server]                              # 导出工具 Schema（可加 -o json）；references 缺失时必用
+tuniu health [server]                              # 健康检查
 tuniu update                     # 一键更新 CLI（并刷新本机已安装的 skill）
 tuniu discovery refresh && tuniu discovery list   # 刷新服务列表
 ```
@@ -125,11 +86,7 @@ tuniu discovery refresh && tuniu discovery list   # 刷新服务列表
 | `flight` | `searchLowestPriceFlight` → `multiCabinDetails` → `getBookingRequiredInfo` → `saveOrder` |
 | `intelflight` | `list_intel_flights` → `get_intel_flight_details` → `getBookingRequiredInfo` → `create_intel_flight_order` |
 | `hotel` | `tuniuHotelSearch` → `tuniuHotelDetail` → `tuniuHotelCreateOrder` |
-| `ticket` | `query_cheapest_tickets` → `create_ticket_order` |
 | `train` | `searchLowestPriceTrain` → `queryTrainDetail` → `bookTrain` |
-| `cruise` | `searchCruiseList` → `getCruiseProductDetail` → `getCruiseCabinAndRoom` → `saveCruiseOrder` |
-| `holiday` | `searchHolidayList` → `getHolidayProductDetail` → `saveHolidayOrder` |
-| `package-booking` | `package_booking_create` →（确认）→ `package_booking_submit` |
 
 各服务调用模板、翻页规则、展示规范、场景示例见对应 `references/<server>.md`。
 
@@ -137,13 +94,12 @@ tuniu discovery refresh && tuniu discovery list   # 刷新服务列表
 
 以下情况须先 `tuniu discovery refresh && tuniu discovery list`：
 
-- 用户需求不在已知服务列表中
-- 工具不存在（退出码 102）
-- 首次使用 / 无 `intelflight` / 无 `package-booking`
+- 首次使用保留的酒店、航班、火车服务，或对应工具不存在（退出码 102）
+- 仅查找 `hotel`、`flight`、`intelflight`、`train` 这四类服务；不要据此扩展到其他旅行产品
 
 ## 响应与退出码
 
-成功时 stdout 为 JSON：`{"success": true, "result": {...}}`。`getBookingRequiredInfo`、`getHolidayBookingRequiredInfo`、`getCruiseBookingRequiredInfo` 返回纯文本，勿强行 JSON 解析。
+成功时 stdout 为 JSON：`{"success": true, "result": {...}}`。`getBookingRequiredInfo` 返回纯文本，勿强行 JSON 解析。
 
 | 退出码 | 含义 | 处理建议 |
 |--------|------|----------|
@@ -151,42 +107,28 @@ tuniu discovery refresh && tuniu discovery list   # 刷新服务列表
 | 101 | 连接失败 | 重试或检查网络 |
 | 102 | 工具不存在 | 优先读取 `error.details.available_tools` 改用真实工具名并重试；否则 `tuniu list <server> -o json`，再用 `tuniu help` 或 `tuniu schema <server> -o json` 确认。禁止继续用错误工具名重试 |
 | 103 | 参数错误 | 运行 `tuniu help <server> <tool>` |
-| 104 | 认证失败 | 检查 OAuth / `TUNIU_API_KEY` |
+| 104 | 认证失败 | 停止调用并报告，由项目 Hook / 服务配置检查当前用户的 API Key 注入状态 |
 | 105 | 超时 | 使用 `-t 60` 增加超时 |
 | 106 | 服务器错误 | 联系服务提供方或稍后重试 |
 | 107 | 配置错误 | 运行 `tuniu config show` 检查配置 |
-| 108 | 未配置 API Key | 优先 OAuth；必要时设置 `TUNIU_API_KEY` |
-| 109 | API Key 无效 | 更新 `TUNIU_API_KEY`，或改用 OAuth |
-| 110 | 需要 OAuth 登录 | 按当前 source 执行 `tuniu auth login --source <source>`（daemon 环境加 `--daemon`），再用 `tuniu auth status --source <source>` 确认 |
-| 111 | OAuth 授权失败 | 检查 OAuth 配置/网络后，按同一 source 重新 `tuniu auth login --source <source>` |
-| 112 | OAuth token 刷新失败 | 当前 source 授权已失效，重新执行 `tuniu auth login --source <source>` |
+| 108 | 未配置 API Key | 停止调用并报告，由项目 Hook / 服务配置检查当前用户的 API Key 注入状态 |
+| 109 | API Key 无效 | 停止调用并报告，由项目 Hook / 服务配置检查当前用户的 API Key |
+| 110 | 需要 OAuth 登录 | 本 skill 不执行 OAuth 登录；停止调用并报告鉴权失败 |
+| 111 | OAuth 授权失败 | 本 skill 不处理 OAuth；停止调用并报告鉴权失败 |
+| 112 | OAuth token 刷新失败 | 本 skill 不使用 OAuth；停止调用并报告鉴权失败 |
 | 199 | 未知错误 | 使用 `-d` 调试模式 |
 
 ## 全局约束
 
-1. **凭证与 PII 安全**：勿在回复或日志中暴露 OAuth token、refresh token、`TUNIU_API_KEY`；联系人姓名、手机号、乘客姓名、证件号仅在预订时发送至 MCP 服务。
-2. **认证**：认证错误（退出码 104、108、109、110、111、112）先确认 source，再 `tuniu auth login/status --source <source>`。
+1. **凭证与 PII 安全**：勿在回复或日志中暴露 `TUNIU_API_KEY` 或其他凭证；联系人姓名、手机号、乘客姓名、证件号仅在预订时发送至 MCP 服务。
+2. **认证**：认证错误（退出码 104、108、109、110、111、112）停止调用并报告，由项目 Hook / 服务配置检查；不执行 OAuth 登录或自行设置 API Key。
 3. **日期格式**：所有日期均为 `YYYY-MM-DD`。
 4. **参数验证**：下单前必须先调用搜索/详情接口获取必需参数（如 `cabinPriceId`、`productId`、`resId`、`queryId`、`sourceId`、`preBookParam` 等）。
 5. **翻页**：各服务翻页参数不同，注意区分（详见各 `references/<server>.md`）。
 6. **下单结果**：下单成功后展示 `orderId`/`order_id` 与支付或详情链接，提醒用户完成支付，并在途牛 App/小程序跟进订单与出行通知。
 7. **调试模式**：遇到问题时使用 `-d` 参数查看详细请求/响应。
-8. **团期价格展示**：成人/儿童价格均需基于可售团期原始字段展示；儿童价为 0 时不展示儿童价，双 0 团期不展示。
 
 ## 其他命令
-
-### 认证
-
-```bash
-tuniu auth status --source <source>          # 查看指定接入源授权状态
-tuniu auth login --source <source>           # 登录授权（CLI 打开浏览器并阻塞至完成）
-tuniu auth login --daemon --source <source>  # daemon 模式：输出授权 URL 后立即退出
-tuniu auth use <source>                      # 持久化默认 source（写入 config.json）
-tuniu auth use --show                        # 查看当前默认 source 与解析结果
-tuniu auth use --clear                       # 清除持久化默认 source
-tuniu auth logout --source <source>          # 清除当前 source 的本地 OAuth 授权
-tuniu auth logout --all                      # 清除当前 profile 下全部 source
-```
 
 ### CLI 更新
 
