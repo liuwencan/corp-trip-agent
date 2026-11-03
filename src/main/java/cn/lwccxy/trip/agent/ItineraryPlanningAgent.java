@@ -4,6 +4,7 @@ import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
+import cn.lwccxy.trip.agent.hooks.LongTermMemoryRecordHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.hooks.TuniuApiKeyShellHook;
 import cn.lwccxy.trip.agent.hooks.TuniuShellCommandValidator;
@@ -14,8 +15,7 @@ import io.agentscope.core.memory.LongTermMemory;
 import io.agentscope.core.memory.LongTermMemoryMode;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
 import io.agentscope.core.memory.autocontext.AutoContextMemory;
-import io.agentscope.core.memory.mem0.Mem0ApiType;
-import io.agentscope.core.memory.mem0.Mem0LongTermMemory;
+import io.agentscope.core.memory.bailian.BailianLongTermMemory;
 import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.skill.SkillBox;
@@ -38,6 +38,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** 配置只生成差旅行程候选方案的规划子智能体。 */
@@ -51,6 +52,7 @@ public class ItineraryPlanningAgent {
     private final PersistSessionHook persistSessionHook;
     private final ProgressNotificationHook progressNotificationHook;
     private final ModelUsageBillingHook modelUsageBillingHook;
+    private final LongTermMemoryRecordHook longTermMemoryRecordHook;
     private final TuniuApiKeyShellHook tuniuApiKeyShellHook;
     private final McpClientWrapper weatherMcpClient;
     private final List<String> enabledWeatherTools;
@@ -58,12 +60,15 @@ public class ItineraryPlanningAgent {
     private final ProviderApiKeyTools providerApiKeyTools;
     private final AgentSkillRepository agentSkillRepository;
     private final String itineraryPlanningPrompt;
-
+    private final String dashscopeApiKey;
+    private final String memoryLibraryId;
 
     /**
      * 创建行程规划智能体配置。
      *
      * @param enabledWeatherTools 配置允许注册的天气 MCP 工具名称
+     * @param dashscopeApiKey 百炼 API Key
+     * @param memoryLibraryId 百炼长期记忆库标识
      */
     public ItineraryPlanningAgent(Model model, PersistSessionHook persistSessionHook,
                                   ProgressNotificationHook progressNotificationHook, McpClientWrapper weatherMcpClient,
@@ -71,11 +76,15 @@ public class ItineraryPlanningAgent {
                                   DestinationLiveTools destinationLiveTools, AgentSkillRepository agentSkillRepository,
                                   ProviderApiKeyTools providerApiKeyTools,
                                   ModelUsageBillingHook modelUsageBillingHook,
-                                  TuniuApiKeyShellHook tuniuApiKeyShellHook) {
+                                  LongTermMemoryRecordHook longTermMemoryRecordHook,
+                                  TuniuApiKeyShellHook tuniuApiKeyShellHook,
+                                  @Value("${corp.trip.bailian.dashscope-api}") String dashscopeApiKey,
+                                  @Value("${corp.trip.bailian.memory-library-id}") String memoryLibraryId) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
         this.progressNotificationHook = progressNotificationHook;
         this.modelUsageBillingHook = modelUsageBillingHook;
+        this.longTermMemoryRecordHook = longTermMemoryRecordHook;
         this.tuniuApiKeyShellHook = tuniuApiKeyShellHook;
         this.weatherMcpClient = weatherMcpClient;
         // 清理配置中的空格和空项，防止它们影响 MCP 工具名精确匹配。
@@ -87,6 +96,8 @@ public class ItineraryPlanningAgent {
         this.providerApiKeyTools = providerApiKeyTools;
         this.agentSkillRepository = agentSkillRepository;
         this.itineraryPlanningPrompt = loadPrompt();
+        this.dashscopeApiKey = dashscopeApiKey;
+        this.memoryLibraryId = memoryLibraryId;
     }
 
     /** 为当前业务会话创建隔离的行程规划智能体。 */
@@ -129,7 +140,7 @@ public class ItineraryPlanningAgent {
                         .timeout(Duration.ofMinutes(30)).build()) // 工具执行超时配置
                 .memory(new AutoContextMemory(autoContextConfig, model))
                 .hooks(List.of(persistSessionHook, tuniuApiKeyShellHook,
-                        progressNotificationHook, modelUsageBillingHook))
+                        progressNotificationHook, modelUsageBillingHook, longTermMemoryRecordHook))
                 .longTermMemory(longTermMemory)
                 .longTermMemoryMode(LongTermMemoryMode.AGENT_CONTROL) // AGENT_CONTROL模式：给Agent提供两个工具（检索/存储）由Agent决定何时调用工具进行存储长期记忆, 以及召回用户长期记忆
                 .build();
@@ -165,21 +176,18 @@ public class ItineraryPlanningAgent {
         }
     }
 
-    /**
-     * 使用自建Mem0存储和检索用户长期记忆
-     * 官方文档：https://java.agentscope.io/v1/zh/docs/task/memory#%E8%AE%B0%E5%BF%86%E6%9E%B6%E6%9E%84
-     */
+    /** 使用当前用户标识和百炼 API Key 创建长期记忆实现。 */
     public LongTermMemory createLongTermMemory() {
         AgentRuntimeContext agentRuntimeContext = AgentRuntimeContextHolder.get();
         String userId = agentRuntimeContext.getUserId();
 
-        // 使用自建 Mem0，需要指定 apiType 为 Mem0ApiType.SELF_HOSTED
-        Mem0LongTermMemory mem0LongTermMemory = Mem0LongTermMemory.builder()
-                .userId(userId) // 多用户隔离
-                .apiBaseUrl("http://localhost:8888")  // 自建 Mem0 服务地址
-                .apiType(Mem0ApiType.SELF_HOSTED)  // 指定为自建 Mem0
+        // 使用当前认证用户作为记忆归属，避免不同用户共享长期记忆数据。
+        return BailianLongTermMemory.builder()
+                .apiKey(dashscopeApiKey)
+                .userId(userId)
+                .memoryLibraryId(memoryLibraryId)
+                .metadata(Map.of("source", "corp-trip"))
+                .topK(20)
                 .build();
-
-        return mem0LongTermMemory;
     }
 }

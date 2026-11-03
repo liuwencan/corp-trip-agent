@@ -1,6 +1,7 @@
 package cn.lwccxy.trip.agent.config;
 
 import cn.lwccxy.trip.agent.hooks.ConfirmationHook;
+import cn.lwccxy.trip.agent.hooks.LongTermMemoryRecordHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
@@ -30,6 +31,12 @@ public class CorpTripAgentHookConfig {
     @Bean
     public ModelUsageBillingHook modelUsageBillingHook() {
         return new ModelUsageBillingHook();
+    }
+
+    /** 创建审计长期记忆写入和检索行为的 Hook。 */
+    @Bean
+    public LongTermMemoryRecordHook longTermMemoryRecordHook() {
+        return new LongTermMemoryRecordHook();
     }
 
     /**
