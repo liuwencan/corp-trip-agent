@@ -10,6 +10,7 @@ import cn.lwccxy.trip.agent.hooks.TuniuApiKeyShellHook;
 import cn.lwccxy.trip.agent.hooks.TuniuShellCommandValidator;
 import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
 import cn.lwccxy.trip.agent.tools.ProviderApiKeyTools;
+import cn.lwccxy.trip.agent.tools.TripOrderReadTools;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.memory.LongTermMemory;
 import io.agentscope.core.memory.LongTermMemoryMode;
@@ -62,6 +63,8 @@ public class ItineraryPlanningAgent {
     private final String itineraryPlanningPrompt;
     private final String dashscopeApiKey;
     private final String memoryLibraryId;
+    private final TripOrderReadTools tripOrderReadTools;
+
 
     /**
      * 创建行程规划智能体配置。
@@ -79,7 +82,8 @@ public class ItineraryPlanningAgent {
                                   LongTermMemoryRecordHook longTermMemoryRecordHook,
                                   TuniuApiKeyShellHook tuniuApiKeyShellHook,
                                   @Value("${corp.trip.bailian.dashscope-api}") String dashscopeApiKey,
-                                  @Value("${corp.trip.bailian.memory-library-id}") String memoryLibraryId) {
+                                  @Value("${corp.trip.bailian.memory-library-id}") String memoryLibraryId,
+                                  TripOrderReadTools tripOrderReadTools) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
         this.progressNotificationHook = progressNotificationHook;
@@ -98,6 +102,7 @@ public class ItineraryPlanningAgent {
         this.itineraryPlanningPrompt = loadPrompt();
         this.dashscopeApiKey = dashscopeApiKey;
         this.memoryLibraryId = memoryLibraryId;
+        this.tripOrderReadTools = tripOrderReadTools;
     }
 
     /** 为当前业务会话创建隔离的行程规划智能体。 */
@@ -116,6 +121,7 @@ public class ItineraryPlanningAgent {
         // 提供wttr.in短期天气和NewsData.io目的地资讯查询，补足规划所需的实时参考信息。
         toolkit.registerTool(destinationLiveTools);
         toolkit.registerTool(providerApiKeyTools);
+        toolkit.registerTool(tripOrderReadTools); // 出差行程单读取工具
         // 只注册 YAML 白名单中的天气 MCP 工具；空名单时跳过注册，避免空名单退化为全量开放。
         if (weatherMcpClient != null && !enabledWeatherTools.isEmpty()) {
             toolkit.registration().mcpClient(weatherMcpClient).enableTools(enabledWeatherTools);
