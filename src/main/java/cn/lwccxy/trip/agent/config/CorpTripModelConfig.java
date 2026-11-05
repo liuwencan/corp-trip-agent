@@ -28,9 +28,9 @@ public class CorpTripModelConfig {
         Model model =
                 DashScopeChatModel.builder()
                         .apiKey(apiKey)
-                        .modelName("qwen3.8-27b")
+                        .modelName("deepseek-v4-pro-0813")
                         .stream(true) // 是否流式输出
-                        .endpointType(EndpointType.MULTIMODAL)
+//                        .endpointType(EndpointType.MULTIMODAL)
                         .formatter(new DashScopeChatFormatter())
                         .build();
         return model;
@@ -46,7 +46,7 @@ public class CorpTripModelConfig {
         Model model =
                 DashScopeChatModel.builder()
                         .apiKey(apiKey)
-                        .modelName("qwen3.8-27b")
+                        .modelName("deepseek-v4-pro-0813")
                         .stream(true) // 是否流式输出
                         .endpointType(EndpointType.MULTIMODAL) // 使用多模态端点
                         .build();

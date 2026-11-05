@@ -166,6 +166,64 @@ AgentScope 对话会话使用 MySQL 持久化。RAG 知识索引当前由内存�
 
 以上是按当前代码可见范围整理的后续方向，不代表所有事项都已有排期。
 
+## 目前效果图
+
+以下截图展示当前前端与智能体对话中的主要交互流程。
+
+### 对话入口与信息补充
+
+**智能差旅助手对话首页**
+
+<img src="doc/images/readme/01-welcome-and-chat.png" alt="智能差旅助手对话首页" width="960">
+
+**行程规划信息补充表单**
+
+<img src="doc/images/readme/02-trip-info-form.png" alt="行程规划信息补充表单" width="960">
+
+### 申请与审批
+
+**申请未获审批时提示先完成审批**
+
+<img src="doc/images/readme/03-planning-approval-required.png" alt="申请未获审批时提示先完成审批" width="960">
+
+**出差申请提交结果**
+
+<img src="doc/images/readme/04-trip-application-submitted.png" alt="出差申请提交结果" width="960">
+
+**申请审批完成后的 Agent 执行记录**
+
+<img src="doc/images/readme/05-agent-progress-order.png" alt="申请审批完成后的 Agent 执行记录" width="960">
+
+**审批状态与结果展示**
+
+<img src="doc/images/readme/06-approval-completed.png" alt="审批状态与结果展示" width="960">
+
+### 行程规划与工具执行
+
+**行程规划 Agent 执行结果**
+
+<img src="doc/images/readme/07-itinerary-planning-result.png" alt="行程规划 Agent 执行结果" width="960">
+
+**行程单查询工具调用结果**
+
+<img src="doc/images/readme/08-trip-order-tools.png" alt="行程单查询工具调用结果" width="960">
+
+**目的地资讯与天气工具调用结果**
+
+<img src="doc/images/readme/09-destination-and-weather-tools.png" alt="目的地资讯与天气工具调用结果" width="960">
+
+**Agent 执行过程时间线**
+
+<img src="doc/images/readme/10-agent-progress-summary.png" alt="Agent 执行过程时间线" width="960">
+
+**审批及子 Agent 执行明细**
+
+<img src="doc/images/readme/11-agent-progress-details.png" alt="审批及子 Agent 执行明细" width="960">
+
+**途牛酒店查询工具结果示例**
+
+<img src="doc/images/readme/12-hotel-provider-tool.png" alt="途牛酒店查询工具结果示例" width="960">
+
 ## 项目文档
 
 - [整体架构说明](doc/architecture-overview.md)

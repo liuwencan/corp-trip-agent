@@ -1,5 +1,8 @@
 package cn.lwccxy.trip.agent.config;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
+import io.agentscope.core.memory.LongTermMemory;
+import io.agentscope.core.memory.mem0.Mem0ApiType;
+import io.agentscope.core.memory.mem0.Mem0LongTermMemory;
 import io.agentscope.core.session.Session;
 import io.agentscope.core.session.mysql.MysqlSession;
 import io.agentscope.core.skill.repository.AgentSkillRepository;
@@ -30,7 +33,10 @@ public class CorpTripAgentConfig {
         return new MysqlSession(dataSource, "corptrip", "agentscope_session", true);
     }
 
-
+    /**
+     * 本地文件系统的Skill仓库
+     * @param skillPath 存储skill的基本路径basePath
+     */
     @Bean
     public AgentSkillRepository fileSystemSkillRepository(
             @Value("${corp.trip.skillspath:classpath:skills}") String skillPath) throws IOException {
@@ -39,5 +45,4 @@ public class CorpTripAgentConfig {
         }
         return new FileSystemSkillRepository(Path.of(skillPath));
     }
-
 }
