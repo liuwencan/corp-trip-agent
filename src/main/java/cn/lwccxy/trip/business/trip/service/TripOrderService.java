@@ -121,6 +121,18 @@ public class TripOrderService {
         return Response.success(toVO(require(mapper.owned(required(userId), required(id)))));
     }
 
+    /** 查询当前用户与指定出差日期范围重叠的有效申请单。 */
+    public List<TripOrderVO> findActiveOverlapping(String userId, String departureDate, String returnDate) {
+        String owner = required(userId);
+        LocalDate departure = parseDate(departureDate);
+        LocalDate returning = parseDate(returnDate);
+        if (departure.isAfter(returning)) {
+            throw new BizException(TripErrorCode.INVALID_PARAMETER);
+        }
+        return mapper.findActiveOverlapping(owner, departure.toString(), returning.toString())
+                .stream().map(TripOrderService::toVO).toList();
+    }
+
     /** 更新当前用户所属的出差申请单。未提供的字段保留原值。 */
     @Transactional
     public Response<TripOrderVO> update(String userId, String id, TripOrderSaveForm form) {
@@ -205,6 +217,15 @@ public class TripOrderService {
             if (departureDate.isAfter(returnDate)) {
                 throw new BizException(TripErrorCode.INVALID_PARAMETER);
             }
+        } catch (DateTimeParseException exception) {
+            throw new BizException(TripErrorCode.INVALID_PARAMETER);
+        }
+    }
+
+    /** 解析出差日期，非法值统一映射为业务参数错误。 */
+    private static LocalDate parseDate(String value) {
+        try {
+            return LocalDate.parse(required(value));
         } catch (DateTimeParseException exception) {
             throw new BizException(TripErrorCode.INVALID_PARAMETER);
         }

@@ -41,7 +41,8 @@ public class TripOrderWriteTools {
             @ToolParam(name = "departureCity", description = "必填，出发城市，最多 128 个字符") String departureCity,
             @ToolParam(name = "departureDate", description = "必填，出发日期，格式 YYYY-MM-DD") String departureDate,
             @ToolParam(name = "returnDate", description = "必填，返回日期，格式 YYYY-MM-DD") String returnDate,
-            @ToolParam(name = "purpose", description = "必填，出差事由，最多 512 个字符") String purpose) {
+            @ToolParam(name = "purpose", description = "必填，出差事由，最多 512 个字符") String purpose,
+            @ToolParam(name = "confirmConflict", description = "有日期冲突时必填 true，表示用户在了解冲突详情后明确选择继续；否则保持 false", required = false) Boolean confirmConflict) {
         String createdAt = OffsetDateTime.now().toString();
         try {
             String userId = requireUserId(sessionContext);
@@ -52,6 +53,20 @@ public class TripOrderWriteTools {
             String normalizedPurpose = requireText(purpose, "purpose", "缺少 purpose：请说明本次出差事由。", 512);
             if (LocalDate.parse(normalizedDepartureDate).isAfter(LocalDate.parse(normalizedReturnDate))) {
                 throw new IllegalArgumentException("日期范围无效：departureDate 不能晚于 returnDate，请重新提供出发和返回日期。");
+            }
+
+            // 创建入口重新检查有效行程，防止模型跳过预检或预检后已有行程发生变化。
+            var conflicts = tripOrderService.findActiveOverlapping(userId, normalizedDepartureDate, normalizedReturnDate);
+            if (!conflicts.isEmpty() && !Boolean.TRUE.equals(confirmConflict)) {
+                LocalDate requestedDeparture = LocalDate.parse(normalizedDepartureDate);
+                LocalDate requestedReturn = LocalDate.parse(normalizedReturnDate);
+                var conflictPoints = conflicts.stream()
+                        .map(order -> TripScheduleConflictTools.toConflictPoint(
+                                order, requestedDeparture, requestedReturn))
+                        .toList();
+                return toJson(new CreateTripApplicationResult(false, "SCHEDULE_CONFLICT",
+                        buildConflictMessage(conflictPoints),
+                        null, null, "trip_domain_service", createdAt, conflictPoints));
             }
 
             TripOrderSaveForm form = new TripOrderSaveForm();
@@ -66,19 +81,19 @@ public class TripOrderWriteTools {
             return toJson(new CreateTripApplicationResult(true, null,
                     "出差申请单已创建并提交审批队列，当前申请状态为 SUBMITTED，审批状态为 PENDING，等待管理员处理。",
                     creation.application(), creation.approval(),
-                    "trip_domain_service", createdAt));
+                    "trip_domain_service", createdAt, java.util.List.of()));
         } catch (BizException exception) {
             return toJson(new CreateTripApplicationResult(false, exception.getErrorCode(),
-                    friendlyMessage(exception), null, null, "trip_domain_service", createdAt));
+                    friendlyMessage(exception), null, null, "trip_domain_service", createdAt, java.util.List.of()));
         } catch (IllegalArgumentException exception) {
             return toJson(new CreateTripApplicationResult(false, "INVALID_PARAMETER", exception.getMessage(),
-                    null, null, "trip_domain_service", createdAt));
+                    null, null, "trip_domain_service", createdAt, java.util.List.of()));
         } catch (Exception exception) {
             // 工具边界将所有未知异常转换为稳定提示，避免模型误以为申请已创建成功。
             logger.error("[TOOL][create_trip_application] 创建申请单失败", exception);
             return toJson(new CreateTripApplicationResult(false, "INTERNAL_ERROR",
                     "创建出差申请单时发生系统异常，请稍后重试；本次结果不能视为创建成功。",
-                    null, null, "trip_domain_service", createdAt));
+                    null, null, "trip_domain_service", createdAt, java.util.List.of()));
         }
     }
 
@@ -167,6 +182,19 @@ public class TripOrderWriteTools {
         return "生成变更草案失败，请稍后重试；当前没有执行任何修改。";
     }
 
+    /** 将创建前发现的每条重叠行程整理成模型可以直接转述给用户的说明。 */
+    private static String buildConflictMessage(
+            java.util.List<TripScheduleConflictTools.ConflictPoint> conflicts) {
+        String details = conflicts.stream()
+                .map(conflict -> String.format("申请单 %s（%s至%s，状态 %s）与本次申请重叠 %s 至 %s",
+                        conflict.tripOrderId(), conflict.existingDepartureDate(),
+                        conflict.existingReturnDate(), conflict.status(),
+                        conflict.overlapStartDate(), conflict.overlapEndDate()))
+                .collect(java.util.stream.Collectors.joining("；"));
+        return "发现已有行程日期冲突，申请尚未创建。冲突原因：" + details
+                + "。建议修改本次申请的出发或返回日期，避开重叠区间；如果确需继续，必须先向用户说明以上冲突并取得明确同意。";
+    }
+
     /** 统一序列化工具返回 record。 */
     private static String toJson(Object result) {
         return JSON.toJSONString(result);
@@ -188,6 +216,7 @@ public class TripOrderWriteTools {
     public record CreateTripApplicationResult(boolean success, String errorCode, String message,
                                               TripOrderVO application,
                                               cn.lwccxy.trip.business.trip.domain.vo.TripApprovalRecordVO approval,
-                                              String source, String createdAt) {
+                                              String source, String createdAt,
+                                              java.util.List<TripScheduleConflictTools.ConflictPoint> conflicts) {
     }
 }

@@ -18,6 +18,15 @@ public interface TripOrderMapper extends BaseMapper<TripOrderEntity> {
     @Select("SELECT * FROM trip_order WHERE id=#{id} AND user_id=#{userId}")
     TripOrderEntity owned(@Param("userId") String userId, @Param("id") String id);
 
+    /** 查询当前用户在指定日期范围内仍有效的重叠出差申请。 */
+    @Select("SELECT * FROM trip_order WHERE user_id=#{userId} "
+            + "AND status IN ('DRAFT', 'SUBMITTED', 'APPROVED') "
+            + "AND departure_date <= #{returnDate} AND return_date >= #{departureDate} "
+            + "ORDER BY departure_date ASC, id ASC")
+    List<TripOrderEntity> findActiveOverlapping(@Param("userId") String userId,
+                                                @Param("departureDate") String departureDate,
+                                                @Param("returnDate") String returnDate);
+
     /** 按当前用户锁定单个申请单，供更新时保持归属校验和数据读取一致。 */
     @Select("SELECT * FROM trip_order WHERE id=#{id} AND user_id=#{userId} FOR UPDATE")
     TripOrderEntity lockOwned(@Param("userId") String userId, @Param("id") String id);
