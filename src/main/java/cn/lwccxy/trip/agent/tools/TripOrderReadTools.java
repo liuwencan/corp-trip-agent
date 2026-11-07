@@ -42,7 +42,7 @@ public class TripOrderReadTools {
     }
 
     /** 查询当前认证用户可见的出差申请单列表，并将分页结果转换为工具专用结构。 */
-    @Tool(name = "query_trip_orders", description = "查询当前登录用户自己的出差申请单。支持按状态、目的地、出发城市、出发日期和返回日期筛选并分页。pageNo 默认 1，pageSize 默认 20，范围 1 到 100；不要传 userId。")
+    @Tool(name = "query_trip_orders", description = "查询当前登录用户自己的出差申请单。支持按状态、目的地、出发城市、出发日期和返回日期筛选并分页。pageNo 默认 1，pageSize 默认 20，范围 1 到 100。")
     public String queryTripOrders(
             AgentRuntimeContext sessionContext,
             @ToolParam(name = "status", description = "可选状态：DRAFT、SUBMITTED、APPROVED、REJECTED、COMPLETED、CANCELLED", required = false) String status,

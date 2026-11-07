@@ -61,8 +61,9 @@ public class TripOrderWriteTools {
                 LocalDate requestedDeparture = LocalDate.parse(normalizedDepartureDate);
                 LocalDate requestedReturn = LocalDate.parse(normalizedReturnDate);
                 var conflictPoints = conflicts.stream()
-                        .map(order -> TripScheduleConflictTools.toConflictPoint(
-                                order, requestedDeparture, requestedReturn))
+                        .map(order -> TripScheduleConflictTools.createDateOverlapConflict(order,
+                                normalizedDepartureCity, normalizedDestination,
+                                requestedDeparture, requestedReturn))
                         .toList();
                 return toJson(new CreateTripApplicationResult(false, "SCHEDULE_CONFLICT",
                         buildConflictMessage(conflictPoints),
@@ -184,12 +185,10 @@ public class TripOrderWriteTools {
 
     /** 将创建前发现的每条重叠行程整理成模型可以直接转述给用户的说明。 */
     private static String buildConflictMessage(
-            java.util.List<TripScheduleConflictTools.ConflictPoint> conflicts) {
+            java.util.List<TripScheduleConflictTools.ConflictItem> conflicts) {
         String details = conflicts.stream()
-                .map(conflict -> String.format("申请单 %s（%s至%s，状态 %s）与本次申请重叠 %s 至 %s",
-                        conflict.tripOrderId(), conflict.existingDepartureDate(),
-                        conflict.existingReturnDate(), conflict.status(),
-                        conflict.overlapStartDate(), conflict.overlapEndDate()))
+                .map(conflict -> String.format("申请单 %s：%s 建议：%s",
+                        conflict.orderId(), conflict.description(), conflict.suggestion()))
                 .collect(java.util.stream.Collectors.joining("；"));
         return "发现已有行程日期冲突，申请尚未创建。冲突原因：" + details
                 + "。建议修改本次申请的出发或返回日期，避开重叠区间；如果确需继续，必须先向用户说明以上冲突并取得明确同意。";
@@ -217,6 +216,6 @@ public class TripOrderWriteTools {
                                               TripOrderVO application,
                                               cn.lwccxy.trip.business.trip.domain.vo.TripApprovalRecordVO approval,
                                               String source, String createdAt,
-                                              java.util.List<TripScheduleConflictTools.ConflictPoint> conflicts) {
+                                              java.util.List<TripScheduleConflictTools.ConflictItem> conflicts) {
     }
 }

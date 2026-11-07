@@ -27,6 +27,15 @@ public interface TripOrderMapper extends BaseMapper<TripOrderEntity> {
                                                 @Param("departureDate") String departureDate,
                                                 @Param("returnDate") String returnDate);
 
+    /** 查询当前用户在指定日期窗口内仍有效的申请，供检查同日和相邻日交通衔接。 */
+    @Select("SELECT * FROM trip_order WHERE user_id=#{userId} "
+            + "AND status IN ('DRAFT', 'SUBMITTED', 'APPROVED') "
+            + "AND departure_date <= #{windowEnd} AND return_date >= #{windowStart} "
+            + "ORDER BY departure_date ASC, id ASC")
+    List<TripOrderEntity> findActiveInDateWindow(@Param("userId") String userId,
+                                                @Param("windowStart") String windowStart,
+                                                @Param("windowEnd") String windowEnd);
+
     /** 按当前用户锁定单个申请单，供更新时保持归属校验和数据读取一致。 */
     @Select("SELECT * FROM trip_order WHERE id=#{id} AND user_id=#{userId} FOR UPDATE")
     TripOrderEntity lockOwned(@Param("userId") String userId, @Param("id") String id);

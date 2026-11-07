@@ -133,6 +133,19 @@ public class TripOrderService {
                 .stream().map(TripOrderService::toVO).toList();
     }
 
+    /** 查询与拟申请日期相邻一天范围内的有效申请，供行程衔接冲突检测使用。 */
+    public List<TripOrderVO> findActiveNearDateRange(String userId, String departureDate, String returnDate) {
+        String owner = required(userId);
+        LocalDate departure = parseDate(departureDate);
+        LocalDate returning = parseDate(returnDate);
+        if (departure.isAfter(returning)) {
+            throw new BizException(TripErrorCode.INVALID_PARAMETER);
+        }
+        // 查询窗口各向外扩一天，以覆盖候选行程前后一天的城市交通衔接。
+        return mapper.findActiveInDateWindow(owner, departure.minusDays(1).toString(), returning.plusDays(1).toString())
+                .stream().map(TripOrderService::toVO).toList();
+    }
+
     /** 更新当前用户所属的出差申请单。未提供的字段保留原值。 */
     @Transactional
     public Response<TripOrderVO> update(String userId, String id, TripOrderSaveForm form) {
