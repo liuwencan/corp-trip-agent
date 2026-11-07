@@ -16,15 +16,16 @@ import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
+import io.agentscope.core.plan.model.Plan;
+import io.agentscope.core.plan.model.SubTask;
+import io.agentscope.core.plan.model.SubTaskState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.io.IOException;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -226,5 +227,87 @@ public class ProgressNotificationHook implements Hook {
                 .map(TextBlock::getText)
                 .filter(Objects::nonNull)
                 .collect(Collectors.joining("\n"));
+    }
+
+
+
+    // ============ PlanNotebook 计划变化推送 ============
+
+    /**
+     * 当 PlanNotebook 计划发生变化（创建/修改/子任务状态更新/完成）时，
+     * 通过 SSE 向前端推送 {@code plan_update} 事件，包含当前任务列表及其状态。
+     *
+     * <p>事件 JSON 格式：
+     * <pre>
+     * {
+     *   "type": "plan_update",
+     *   "agentName": "ItineraryPlanAgent",
+     *   "planName": "行程规划",
+     *   "tasks": [
+     *     { "idx": 0, "name": "搜索航班", "state": "done" },
+     *     { "idx": 1, "name": "搜索酒店", "state": "in_progress" },
+     *     { "idx": 2, "name": "预订机票", "state": "todo" }
+     *   ]
+     * }
+     * </pre>
+     */
+    public void sendPlanUpdate(String sessionId, Plan plan) {
+        if (sessionId == null) {
+            return;
+        }
+        SseEmitter emitter = sseEmitterRegistry.getEmitter(sessionId);
+        if (emitter == null) {
+            return;
+        }
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("type", "plan_update");
+        data.put("agentName", "ItineraryPlanAgent");
+        List<SubTask> subtasks = plan != null ? plan.getSubtasks() : null;
+        if (plan != null) {
+            data.put("planName", plan.getName() != null ? plan.getName() : "");
+            data.put("tasks", buildPlanTasks(subtasks));
+        } else {
+            // 计划已完成或被清空
+            data.put("planName", "");
+            data.put("tasks", List.of());
+        }
+
+        try {
+            // 计划/任务名理论上不含敏感字段，但仍走统一脱敏出口，防御性覆盖
+            SseEmitterSender.send(emitter, SseEventEnum.PLAN_UPDATE, data);
+            logger.debug("[PLAN_UPDATE] 已推送任务列表 sessionId={}, tasks={}",
+                    sessionId, subtasks != null ? subtasks.size() : 0);
+        } catch (IllegalStateException e) {
+            logger.debug("[PLAN_UPDATE] 发送失败，emitter 已完成: {}", e.getMessage());
+        }
+    }
+
+    private List<Map<String, Object>> buildPlanTasks(List<SubTask> subtasks) {
+        if (subtasks == null || subtasks.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> tasks = new ArrayList<>(subtasks.size());
+        for (int i = 0; i < subtasks.size(); i++) {
+            SubTask st = subtasks.get(i);
+            Map<String, Object> task = new HashMap<>();
+            task.put("idx", i);
+            task.put("name", st.getName() != null ? st.getName() : "");
+            task.put("state", mapSubTaskState(st.getState()));
+            tasks.add(task);
+        }
+        return tasks;
+    }
+
+    private String mapSubTaskState(SubTaskState state) {
+        if (state == null) {
+            return "todo";
+        }
+        return switch (state) {
+            case TODO -> "todo";
+            case IN_PROGRESS -> "in_progress";
+            case DONE -> "done";
+            case ABANDONED -> "abandoned";
+        };
     }
 }

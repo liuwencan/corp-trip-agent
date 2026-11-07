@@ -22,6 +22,7 @@ import io.agentscope.core.memory.mem0.Mem0ApiType;
 import io.agentscope.core.memory.mem0.Mem0LongTermMemory;
 import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.model.Model;
+import io.agentscope.core.plan.PlanNotebook;
 import io.agentscope.core.skill.SkillBox;
 import io.agentscope.core.skill.repository.AgentSkillRepository;
 import io.agentscope.core.tool.ToolExecutionContext;
@@ -138,6 +139,14 @@ public class ItineraryPlanningAgent {
         SkillBox skillBox = buildPlanningSkillBox(toolkit);
         // 长期记忆
         LongTermMemory longTermMemory = createLongTermMemory();
+        // 启动Agent-Plan模式
+        PlanNotebook planNotebook = PlanNotebook.builder()
+                .needUserConfirm(false) // 无需用户手动确认
+                .build();
+        // 给PlanNoteBook挂载一个Hook, 做计划进度推送
+        if(agentRuntimeContext.getSessionId() != null){
+            planNotebook.addChangeHook("plan", (planNoteBook, plan) -> progressNotificationHook.sendPlanUpdate(agentRuntimeContext.getSessionId(), plan));
+        }
 
         // 规划智能体只组合上游目的地咨询和天气结果，不虚构未接入的交通、酒店或价格数据。
         return ReActAgent.builder()
@@ -147,6 +156,7 @@ public class ItineraryPlanningAgent {
                 .sysPrompt(itineraryPlanningPrompt)
                 .toolkit(toolkit)
                 .skillBox(skillBox)
+                .planNotebook(planNotebook)
                 .toolExecutionContext(context)
                 .toolExecutionConfig(ExecutionConfig.builder()
                         .timeout(Duration.ofMinutes(30)).build()) // 工具执行超时配置

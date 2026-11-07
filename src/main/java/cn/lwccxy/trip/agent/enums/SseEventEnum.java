@@ -21,7 +21,8 @@ public enum SseEventEnum {
     AGENT_EVENT("agent_event", "未专门处理的智能体事件"),
     COMPLETE("complete", "流式响应完成事件"),
     ERROR("error", "流式响应错误事件"),
-    ASK("ask", "用户澄清请求事件");
+    ASK("ask", "用户澄清请求事件"),
+    PLAN_UPDATE("plan_update", "Agent-Plan计划进度推送");
 
     private final String code;
     private final String description;
