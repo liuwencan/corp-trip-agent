@@ -8,6 +8,7 @@ import cn.lwccxy.trip.agent.hooks.LongTermMemoryRecordHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.hooks.TuniuApiKeyShellHook;
 import cn.lwccxy.trip.agent.hooks.TuniuShellCommandValidator;
+import cn.lwccxy.trip.agent.hooks.TuniuSearchResultHook;
 import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
 import cn.lwccxy.trip.agent.tools.ProviderApiKeyTools;
 import cn.lwccxy.trip.agent.tools.TripOrderReadTools;
@@ -17,6 +18,8 @@ import io.agentscope.core.memory.LongTermMemoryMode;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
 import io.agentscope.core.memory.autocontext.AutoContextMemory;
 import io.agentscope.core.memory.bailian.BailianLongTermMemory;
+import io.agentscope.core.memory.mem0.Mem0ApiType;
+import io.agentscope.core.memory.mem0.Mem0LongTermMemory;
 import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.skill.SkillBox;
@@ -55,6 +58,7 @@ public class ItineraryPlanningAgent {
     private final ModelUsageBillingHook modelUsageBillingHook;
     private final LongTermMemoryRecordHook longTermMemoryRecordHook;
     private final TuniuApiKeyShellHook tuniuApiKeyShellHook;
+    private final TuniuSearchResultHook tuniuSearchResultHook;
     private final McpClientWrapper weatherMcpClient;
     private final List<String> enabledWeatherTools;
     private final DestinationLiveTools destinationLiveTools;
@@ -81,6 +85,7 @@ public class ItineraryPlanningAgent {
                                   ModelUsageBillingHook modelUsageBillingHook,
                                   LongTermMemoryRecordHook longTermMemoryRecordHook,
                                   TuniuApiKeyShellHook tuniuApiKeyShellHook,
+                                  TuniuSearchResultHook tuniuSearchResultHook,
                                   @Value("${corp.trip.bailian.dashscope-api}") String dashscopeApiKey,
                                   @Value("${corp.trip.bailian.memory-library-id}") String memoryLibraryId,
                                   TripOrderReadTools tripOrderReadTools) {
@@ -90,6 +95,7 @@ public class ItineraryPlanningAgent {
         this.modelUsageBillingHook = modelUsageBillingHook;
         this.longTermMemoryRecordHook = longTermMemoryRecordHook;
         this.tuniuApiKeyShellHook = tuniuApiKeyShellHook;
+        this.tuniuSearchResultHook = tuniuSearchResultHook;
         this.weatherMcpClient = weatherMcpClient;
         // 清理配置中的空格和空项，防止它们影响 MCP 工具名精确匹配。
         this.enabledWeatherTools = enabledWeatherTools == null ? List.of() : enabledWeatherTools.stream()
@@ -145,7 +151,8 @@ public class ItineraryPlanningAgent {
                 .toolExecutionConfig(ExecutionConfig.builder()
                         .timeout(Duration.ofMinutes(30)).build()) // 工具执行超时配置
                 .memory(new AutoContextMemory(autoContextConfig, model))
-                .hooks(List.of(persistSessionHook, tuniuApiKeyShellHook,
+                // 搜索结果在通知及持久化前精简，确保后续模型推理读取替换后的消息。
+                .hooks(List.of(persistSessionHook, tuniuApiKeyShellHook, tuniuSearchResultHook,
                         progressNotificationHook, modelUsageBillingHook, longTermMemoryRecordHook))
                 .longTermMemory(longTermMemory)
                 .longTermMemoryMode(LongTermMemoryMode.AGENT_CONTROL) // AGENT_CONTROL模式：给Agent提供两个工具（检索/存储）由Agent决定何时调用工具进行存储长期记忆, 以及召回用户长期记忆
@@ -188,12 +195,22 @@ public class ItineraryPlanningAgent {
         String userId = agentRuntimeContext.getUserId();
 
         // 使用当前认证用户作为记忆归属，避免不同用户共享长期记忆数据。
-        return BailianLongTermMemory.builder()
-                .apiKey(dashscopeApiKey)
+//        return BailianLongTermMemory.builder()
+//                .apiKey(dashscopeApiKey)
+//                .userId(userId)
+//                .memoryLibraryId(memoryLibraryId)
+//                .metadata(Map.of("source", "corp-trip"))
+//                .topK(20)
+//                .build();
+
+        // 使用自建 Mem0，需要指定 apiType 为 Mem0ApiType.SELF_HOSTED
+        Mem0LongTermMemory customMem0LongTermMemory = Mem0LongTermMemory.builder()
+                .agentName("SmartAssistant")
                 .userId(userId)
-                .memoryLibraryId(memoryLibraryId)
-                .metadata(Map.of("source", "corp-trip"))
-                .topK(20)
+                .timeout(Duration.ofMinutes(30))
+                .apiBaseUrl("http://localhost:8888")  // 自建 Mem0 服务地址
+                .apiType(Mem0ApiType.SELF_HOSTED)  // 指定为自建 Mem0
                 .build();
+        return customMem0LongTermMemory;
     }
 }
