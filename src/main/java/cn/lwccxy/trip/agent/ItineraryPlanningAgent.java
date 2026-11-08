@@ -9,6 +9,7 @@ import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.hooks.TuniuApiKeyShellHook;
 import cn.lwccxy.trip.agent.hooks.TuniuShellCommandValidator;
 import cn.lwccxy.trip.agent.hooks.TuniuSearchResultHook;
+import cn.lwccxy.trip.agent.hooks.TuniuSearchResultCaptureHook;
 import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
 import cn.lwccxy.trip.agent.tools.ProviderApiKeyTools;
 import cn.lwccxy.trip.agent.tools.TripOrderReadTools;
@@ -60,6 +61,7 @@ public class ItineraryPlanningAgent {
     private final LongTermMemoryRecordHook longTermMemoryRecordHook;
     private final TuniuApiKeyShellHook tuniuApiKeyShellHook;
     private final TuniuSearchResultHook tuniuSearchResultHook;
+    private final TuniuSearchResultCaptureHook tuniuSearchResultCaptureHook;
     private final McpClientWrapper weatherMcpClient;
     private final List<String> enabledWeatherTools;
     private final DestinationLiveTools destinationLiveTools;
@@ -87,6 +89,7 @@ public class ItineraryPlanningAgent {
                                   LongTermMemoryRecordHook longTermMemoryRecordHook,
                                   TuniuApiKeyShellHook tuniuApiKeyShellHook,
                                   TuniuSearchResultHook tuniuSearchResultHook,
+                                  TuniuSearchResultCaptureHook tuniuSearchResultCaptureHook,
                                   @Value("${corp.trip.bailian.dashscope-api}") String dashscopeApiKey,
                                   @Value("${corp.trip.bailian.memory-library-id}") String memoryLibraryId,
                                   TripOrderReadTools tripOrderReadTools) {
@@ -97,6 +100,7 @@ public class ItineraryPlanningAgent {
         this.longTermMemoryRecordHook = longTermMemoryRecordHook;
         this.tuniuApiKeyShellHook = tuniuApiKeyShellHook;
         this.tuniuSearchResultHook = tuniuSearchResultHook;
+        this.tuniuSearchResultCaptureHook = tuniuSearchResultCaptureHook;
         this.weatherMcpClient = weatherMcpClient;
         // 清理配置中的空格和空项，防止它们影响 MCP 工具名精确匹配。
         this.enabledWeatherTools = enabledWeatherTools == null ? List.of() : enabledWeatherTools.stream()
@@ -163,6 +167,7 @@ public class ItineraryPlanningAgent {
                 .memory(new AutoContextMemory(autoContextConfig, model))
                 // 搜索结果在通知及持久化前精简，确保后续模型推理读取替换后的消息。
                 .hooks(List.of(persistSessionHook, tuniuApiKeyShellHook, tuniuSearchResultHook,
+                        tuniuSearchResultCaptureHook,
                         progressNotificationHook, modelUsageBillingHook, longTermMemoryRecordHook))
                 .longTermMemory(longTermMemory)
                 .longTermMemoryMode(LongTermMemoryMode.AGENT_CONTROL) // AGENT_CONTROL模式：给Agent提供两个工具（检索/存储）由Agent决定何时调用工具进行存储长期记忆, 以及召回用户长期记忆
