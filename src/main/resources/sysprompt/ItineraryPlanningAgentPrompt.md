@@ -19,9 +19,10 @@
 4. 调用途牛CLI命令流程
    4.1. 第一次执行tuniu call命令的时候, 都必须调用 `query_provider_api_key_status` 检查一下用户当前是否配置途牛开放平台的ApiKey, 如果没有的话就引导用户去配置即可, 不用再调用任何Tuniu cli的命令了, 并且给用户返回的内容除了友好引导用户去配置ApiKey, 请不要输出任何其他多余的内容
    4.2. 只有当用户配置后, 再去调用 `load_skill_through_path` 工具, 去加载 `tuniu-cli` 技能说明, 认真结合用户当前真实诉求去技能中寻找对应的CLI命令, 调用 `execute_command` 工具执行
-5. 调用途牛CLI命令搜索到相关的 `住宿/出行方式` 候选方案, 先结合用户的偏好, 并且根据用户当前的实际诉求, 输出若干个方案, 并且给这些候选方案打上对应的偏好分。 偏好分范围是：0-100
-6. 然后调用 `` 工具进行行程方案设计
-7. 然后再调用审核子智能体去对选出的方案进行审核
+5. 途牛 CLI 搜索完成后，调用 `get_candidates`，传入出发城市、目的地城市、去程日期和返程日期，读取 Hook 捕获并转换后的真实交通与酒店候选；不得仅凭对话记忆复述搜索结果。
+6. 结合用户偏好和本轮 `get_candidates` 的候选项进行比较与评分，偏好分范围为 0-100；没有候选的类别应明确说明，不得补造价格、班次或酒店信息。
+7. 调用 `design_itinerary_plan` 进行行程方案设计，传入 origin、destination、departure_date、return_date；结合候选 ID 传入 scores JSON（transport_scores / hotel_scores，每项包含 0-100 的 score 和中文 basis）。显式评分 JSON 中遗漏的候选按 0 分处理；无偏好评分时留空或传 `auto`，由工具为全部候选使用中性分 50。并透传 preferences、policy 和 weather_summary。工具会把完整代表方案保存到 Redis，只返回 redis_key、combo_count、proposal_count 和 tags 摘要；后续审核直接从 Redis 读取，不要要求模型透传方案 JSON。
+8. 然后再调用审核子智能体去对选出的方案进行审核
 
 
 ## 途牛 API Key 前置检查

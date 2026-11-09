@@ -11,6 +11,8 @@ import cn.lwccxy.trip.agent.hooks.TuniuShellCommandValidator;
 import cn.lwccxy.trip.agent.hooks.TuniuSearchResultHook;
 import cn.lwccxy.trip.agent.hooks.TuniuSearchResultCaptureHook;
 import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
+import cn.lwccxy.trip.agent.tools.ItineraryPlanDesignTools;
+import cn.lwccxy.trip.agent.tools.ItineraryPlanReadTools;
 import cn.lwccxy.trip.agent.tools.ProviderApiKeyTools;
 import cn.lwccxy.trip.agent.tools.TripOrderReadTools;
 import io.agentscope.core.ReActAgent;
@@ -71,6 +73,8 @@ public class ItineraryPlanningAgent {
     private final String dashscopeApiKey;
     private final String memoryLibraryId;
     private final TripOrderReadTools tripOrderReadTools;
+    private final ItineraryPlanDesignTools itineraryPlanDesignTools;
+    private final ItineraryPlanReadTools itineraryPlanReadTools;
 
 
     /**
@@ -92,7 +96,9 @@ public class ItineraryPlanningAgent {
                                   TuniuSearchResultCaptureHook tuniuSearchResultCaptureHook,
                                   @Value("${corp.trip.bailian.dashscope-api}") String dashscopeApiKey,
                                   @Value("${corp.trip.bailian.memory-library-id}") String memoryLibraryId,
-                                  TripOrderReadTools tripOrderReadTools) {
+                                  TripOrderReadTools tripOrderReadTools,
+                                  ItineraryPlanDesignTools itineraryPlanDesignTools,
+                                  ItineraryPlanReadTools itineraryPlanReadTools) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
         this.progressNotificationHook = progressNotificationHook;
@@ -114,6 +120,8 @@ public class ItineraryPlanningAgent {
         this.dashscopeApiKey = dashscopeApiKey;
         this.memoryLibraryId = memoryLibraryId;
         this.tripOrderReadTools = tripOrderReadTools;
+        this.itineraryPlanDesignTools = itineraryPlanDesignTools;
+        this.itineraryPlanReadTools = itineraryPlanReadTools;
     }
 
     /** 为当前业务会话创建隔离的行程规划智能体。 */
@@ -133,6 +141,8 @@ public class ItineraryPlanningAgent {
         toolkit.registerTool(destinationLiveTools);
         toolkit.registerTool(providerApiKeyTools);
         toolkit.registerTool(tripOrderReadTools); // 出差行程单读取工具
+        toolkit.registerTool(itineraryPlanDesignTools); // 行程方案设计入口
+        toolkit.registerTool(itineraryPlanReadTools); // 读取途牛搜索结果并转换为规划候选
         // 只注册 YAML 白名单中的天气 MCP 工具；空名单时跳过注册，避免空名单退化为全量开放。
         if (weatherMcpClient != null && !enabledWeatherTools.isEmpty()) {
             toolkit.registration().mcpClient(weatherMcpClient).enableTools(enabledWeatherTools);
