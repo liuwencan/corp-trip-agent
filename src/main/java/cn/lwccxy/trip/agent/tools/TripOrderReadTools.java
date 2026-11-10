@@ -11,6 +11,7 @@ import cn.lwccxy.trip.business.trip.service.TripApprovalRecordService;
 import cn.lwccxy.trip.business.trip.service.TripOrderService;
 import cn.lwccxy.trip.common.exception.BizException;
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.annotation.JSONField;
 import io.agentscope.core.tool.Tool;
 import io.agentscope.core.tool.ToolParam;
 import org.slf4j.Logger;
@@ -116,6 +117,85 @@ public class TripOrderReadTools {
             return toJson(new TripOrderDetailResult(false, "INTERNAL_ERROR", "查询出差申请单详情时发生系统异常，请稍后重试。",
                     null, "trip_domain_service", queriedAt));
         }
+    }
+
+    /** 检查当前用户指定出差申请单的行程日期是否仍可用于规划。 */
+    @Tool(name = "check_trip_time_validity", description = "检查当前登录用户指定出差申请单的日期是否仍有效。返回 valid=true 表示行程尚未开始且未结束；出发日期当天及之后、或返回日期之后均返回 valid=false。")
+    public String checkTripTimeValidity(
+            AgentRuntimeContext sessionContext,
+            @ToolParam(name = "tripOrderId", description = "必填，出差申请单 ID") String tripOrderId) {
+        String checkedAt = OffsetDateTime.now().toString();
+        LocalDate today = LocalDate.now();
+        try {
+            String userId = requireUserId(sessionContext);
+            String orderId = requireText(tripOrderId, "tripOrderId", "请提供要检查的出差申请单 ID。", MAX_ID_LENGTH);
+
+            // 通过领域服务读取并校验单据归属，避免工具绕过当前用户的数据访问边界。
+            TripOrderVO order = tripOrderService.get(userId, orderId).getData();
+
+            if(order != null){
+                // 如果存在出差申请单相关信息, 就缓存起来
+                sessionContext.setCacheOrder(order);
+            }
+
+            // =============== 检查当前订单是否已经过时 ============
+            String blockReason = evaluateTimeBlockReason(order, today);
+            List<BlockedTripOrder> blockedOrders = blockReason == null
+                    ? List.of()
+                    : List.of(new BlockedTripOrder(order.getId(), order.getDestination(),
+                    order.getDepartureDate(), order.getReturnDate(), blockReason));
+
+            boolean valid = blockedOrders.isEmpty();
+            String message = valid ? "差旅单日期有效，可继续规划。"
+                    : "检测到行程时间无效，无法继续规划。" + blockReason;
+
+            return toTimeValidityJson(new TripOrderTimeValidityResult(true, null, today.toString(), valid, message,
+                    blockedOrders, "trip_domain_service", checkedAt));
+        } catch (BizException exception) {
+            return toTimeValidityJson(new TripOrderTimeValidityResult(false, exception.getErrorCode(), today.toString(),
+                    null, friendlyMessage(exception, "检查出差申请单时间"), List.of(),
+                    "trip_domain_service", checkedAt));
+        } catch (IllegalArgumentException exception) {
+            return toTimeValidityJson(new TripOrderTimeValidityResult(false, "INVALID_PARAMETER", today.toString(),
+                    null, exception.getMessage(), List.of(), "trip_domain_service", checkedAt));
+        } catch (Exception exception) {
+            logger.error("[TOOL][check_trip_time_validity] 检查失败", exception);
+            return toTimeValidityJson(new TripOrderTimeValidityResult(false, "INTERNAL_ERROR", today.toString(),
+                    null, "检查出差申请单时间时发生系统异常，请稍后重试。", List.of(),
+                    "trip_domain_service", checkedAt));
+        }
+    }
+
+    /** 安全序列化时间校验结果，确保工具异常时仍返回可解析的 JSON。 */
+    private static String toTimeValidityJson(TripOrderTimeValidityResult result) {
+        try {
+            String json = toJson(result);
+            return json == null ? "{\"success\":false,\"errorCode\":\"INTERNAL_ERROR\",\"message\":\"工具结果序列化失败。\"}" : json;
+        } catch (Exception exception) {
+            return "{\"success\":false,\"errorCode\":\"INTERNAL_ERROR\",\"message\":\"工具结果序列化失败。\"}";
+        }
+    }
+
+    /** 判断行程是否已经开始、结束，或包含无法识别的日期。 */
+    private static String evaluateTimeBlockReason(TripOrderVO order, LocalDate today) {
+        try {
+            if (hasText(order.getReturnDate())) {
+                LocalDate returnDate = LocalDate.parse(order.getReturnDate());
+                if (today.isAfter(returnDate)) {
+                    return "行程已结束（返回日期 " + order.getReturnDate() + " 已过）。";
+                }
+            }
+            if (hasText(order.getDepartureDate())) {
+                LocalDate departureDate = LocalDate.parse(order.getDepartureDate());
+                if (!today.isBefore(departureDate)) {
+                    return "行程已开始（出发日期 " + order.getDepartureDate() + " 已到达或已过）。";
+                }
+            }
+        } catch (DateTimeParseException exception) {
+            // 历史数据若不符合 YYYY-MM-DD，必须阻止规划并提示修正，不能误判为有效。
+            return "行程日期格式无效，请核对出发日期和返回日期。";
+        }
+        return null;
     }
 
     /** 查询申请单关联的审批记录，或按审批记录 ID 查询当前用户所属记录。 */
@@ -286,6 +366,22 @@ public class TripOrderReadTools {
     public record TripApprovalResult(boolean success, String errorCode, String message,
                                      String queryMode, List<TripApprovalRecordVO> records,
                                      String source, String queriedAt) {
+    }
+
+    /** 差旅单时间有效性检查专用返回结构。 */
+    public record TripOrderTimeValidityResult(boolean success, String errorCode, String today,
+                                              Boolean valid, String message,
+                                              @JSONField(name = "blocked_orders")
+                                              List<BlockedTripOrder> blockedOrders,
+                                              String source, String checkedAt) {
+    }
+
+    /** 因时间原因不能用于规划的差旅单信息。 */
+    public record BlockedTripOrder(@JSONField(name = "order_id") String orderId,
+                                   String destination,
+                                   @JSONField(name = "departure_date") String departureDate,
+                                   @JSONField(name = "return_date") String returnDate,
+                                   String reason) {
     }
 
     /** 列表工具专用分页信息。 */
