@@ -1,5 +1,10 @@
 package cn.lwccxy.trip.agent.context;
 
+import cn.lwccxy.trip.business.trip.domain.vo.TripOrderVO;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * 存储Agent单次调用, 会话级生命周期的上下文
  */
@@ -11,6 +16,10 @@ public class AgentRuntimeContext {
     private volatile String sessionId;
     // 链路追踪ID
     private volatile String traceId;
+    // 订单信息
+    private volatile TripOrderVO cacheOrder;
+    // 差旅政策按目的地城市区分，在单次 Agent 会话内复用查询结果。
+    private final Map<String, String> travelPolicyByCity = new ConcurrentHashMap<>();
 
     public AgentRuntimeContext(String userId, String sessionId, String traceId){
         this.userId = userId;
@@ -33,6 +42,36 @@ public class AgentRuntimeContext {
 
     public String getSessionId() {
         return sessionId;
+    }
+
+    public TripOrderVO getTripOrder() {
+        return cacheOrder;
+    }
+
+    public void setCacheOrder(TripOrderVO cacheOrder) {
+        this.cacheOrder = cacheOrder;
+    }
+
+    /**
+     * 获取指定城市的会话级差旅政策缓存。
+     *
+     * @param city 目的地城市
+     * @return 已缓存的政策 JSON；城市为空或未命中时返回 null
+     */
+    public String getTravelPolicy(String city) {
+        return city == null ? null : travelPolicyByCity.get(city.trim());
+    }
+
+    /**
+     * 保存指定城市的会话级差旅政策缓存。
+     *
+     * @param city 目的地城市
+     * @param travelPolicy 政策 JSON
+     */
+    public void setTravelPolicy(String city, String travelPolicy) {
+        if (city != null && travelPolicy != null) {
+            travelPolicyByCity.put(city.trim(), travelPolicy);
+        }
     }
 
     public static class Builder{
