@@ -1,6 +1,7 @@
 package cn.lwccxy.trip.business.bookingrecord.service;
 
 import cn.lwccxy.trip.business.bookingrecord.domain.entity.BookingRecordEntity;
+import cn.lwccxy.trip.business.bookingrecord.domain.enums.BookingType;
 import cn.lwccxy.trip.business.bookingrecord.domain.form.BookingRecordQueryForm;
 import cn.lwccxy.trip.business.bookingrecord.domain.form.BookingRecordSaveForm;
 import cn.lwccxy.trip.business.bookingrecord.domain.vo.BookingRecordVO;
@@ -10,6 +11,8 @@ import cn.lwccxy.trip.common.exception.BizException;
 import cn.lwccxy.trip.common.response.PageResponse;
 import cn.lwccxy.trip.common.response.Response;
 import com.alibaba.fastjson2.JSON;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import jakarta.validation.Valid;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeanWrapper;
@@ -21,10 +24,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.beans.PropertyDescriptor;
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.UUID;
+import java.util.*;
 
 /** 管理正式预订记录及其用户归属、状态和逻辑删除。 */
 @Service
@@ -47,7 +47,8 @@ public class BookingRecordService {
         BeanUtils.copyProperties(form, entity);
         entity.setBookingId(newBookingId());
         entity.setUserId(owner);
-        entity.setBizType(form.getBizType().trim());
+        // 请求仍使用业务编码，实体使用枚举，需显式转换，避免属性复制时丢失业务类型。
+        entity.setBizType(requireBookingType(form.getBizType()));
         entity.setPlatform(form.getPlatform().trim());
         entity.setStatus(normalize(form.getStatus()) == null ? "CREATED" : form.getStatus().trim());
         entity.setCurrency(normalize(form.getCurrency()) == null ? "CNY" : form.getCurrency().trim());
@@ -63,6 +64,49 @@ public class BookingRecordService {
             throw new BizException(BookingRecordErrorCode.INVALID_PARAMETER);
         }
         return Response.success(toVO(mapper.owned(owner, entity.getBookingId())));
+    }
+
+    /**
+     * 新增内部流程组装的预订记录，并将生成的内部订单号和数据库主键回填到原对象。
+     *
+     * @param bookingRecord 待新增记录，必须提供用户 ID、业务类型和平台；数据库主键必须为空
+     * @return 写入成功时返回 true；校验或写入失败时抛出异常
+     * @throws BizException 记录参数无效或内部订单号、平台订单号重复时抛出
+     */
+    @Transactional
+    public boolean save(BookingRecordEntity bookingRecord) {
+        if (bookingRecord == null || bookingRecord.getId() != null) {
+            throw new BizException(BookingRecordErrorCode.INVALID_PARAMETER);
+        }
+
+        // 用户归属由内部调用方设置，缺失时拒绝落库，避免生成没有归属的预订记录。
+        bookingRecord.setUserId(required(bookingRecord.getUserId()));
+        if (bookingRecord.getBizType() == null) {
+            throw new BizException(BookingRecordErrorCode.INVALID_PARAMETER);
+        }
+        bookingRecord.setPlatform(required(bookingRecord.getPlatform()));
+        String bookingId = normalize(bookingRecord.getBookingId());
+        bookingRecord.setBookingId(bookingId == null ? newBookingId() : bookingId);
+        String status = normalize(bookingRecord.getStatus());
+        bookingRecord.setStatus(status == null ? "CREATED" : status);
+        String currency = normalize(bookingRecord.getCurrency());
+        bookingRecord.setCurrency(currency == null ? "CNY" : currency);
+        bookingRecord.setDeleted(0);
+        if (bookingRecord.getBookedAt() == null) {
+            bookingRecord.setBookedAt(LocalDateTime.now());
+        }
+        validateDetail(bookingRecord.getDetail());
+        validateTimeRange(bookingRecord.getStartTime(), bookingRecord.getEndTime());
+
+        try {
+            // 仅插入新记录，由数据库唯一键防止并发重复落库；MyBatis 回填自增主键。
+            if (mapper.insert(bookingRecord) != 1) {
+                throw new IllegalStateException("预订记录写入失败。");
+            }
+        } catch (DuplicateKeyException exception) {
+            throw new BizException(BookingRecordErrorCode.INVALID_PARAMETER);
+        }
+        return true;
     }
 
     /** 分页查询当前用户的预订记录。 */
@@ -90,6 +134,29 @@ public class BookingRecordService {
         return Response.success(toVO(requireOwned(required(userId), required(bookingId))));
     }
 
+    /**
+     * 按平台、业务类型和外部订单号查询未删除的预订记录，供内部落库流程检查重复订单。
+     *
+     * @param platform 预订平台，不能为空
+     * @param bizType 预订业务类型，查询前转为大写
+     * @param externalOrderNo 外部平台订单号，不能为空
+     * @return 匹配的预订记录；不存在时返回空 Optional
+     * @throws BizException 任一查询条件为空白时抛出参数异常
+     */
+    public Optional<BookingRecordVO> findByExternalOrder(String platform, String bizType, String externalOrderNo) {
+        String provider = required(platform);
+        String type = required(bizType).toUpperCase(Locale.ROOT);
+        String orderNo = required(externalOrderNo);
+
+        // 三个条件共同对应供应商订单唯一键，排除逻辑删除记录，避免将无效记录视为已预订。
+        BookingRecordEntity entity = mapper.selectOne(new LambdaQueryWrapper<BookingRecordEntity>()
+                .eq(BookingRecordEntity::getPlatform, provider)
+                .eq(BookingRecordEntity::getBizType, type)
+                .eq(BookingRecordEntity::getExternalOrderNo, orderNo)
+                .eq(BookingRecordEntity::getDeleted, 0));
+        return Optional.ofNullable(entity).map(BookingRecordService::toVO);
+    }
+
     /** 在供应商确认取消后，按用户归属和外部订单号更新正式预订状态。 */
     @Transactional
     public boolean markCancelledByExternalOrder(String userId, String bizType, String platform,
@@ -103,6 +170,45 @@ public class BookingRecordService {
                 safeExternalStatus(externalStatus)) == 1;
     }
 
+    /**
+     * 在供应商确认取消后，按用户归属和内部预订单号同步本地取消状态。
+     *
+     * @param userId 当前登录用户 ID
+     * @param bookingId 内部预订单号，不是数据库主键或供应商订单号
+     * @return 同步成功的响应；已经取消的记录重复调用仍视为成功
+     * @throws BizException 参数无效、记录不属于当前用户或当前状态不允许取消时抛出
+     */
+    @Transactional
+    public Response<Void> cancel(String userId, String bookingId) {
+        String owner = required(userId);
+        String id = required(bookingId);
+        if (id.length() > 64) {
+            throw new BizException(BookingRecordErrorCode.INVALID_PARAMETER);
+        }
+
+        // 归属、未删除和可取消状态在同一条更新语句中校验，避免并发完成或退款后又被覆盖为取消。
+        int affected = mapper.update(null, new LambdaUpdateWrapper<BookingRecordEntity>()
+                .eq(BookingRecordEntity::getUserId, owner)
+                .eq(BookingRecordEntity::getBookingId, id)
+                .eq(BookingRecordEntity::getDeleted, 0)
+                .notIn(BookingRecordEntity::getStatus, "CANCELLED", "COMPLETED", "REFUNDED")
+                .set(BookingRecordEntity::getStatus, "CANCELLED")
+                .set(BookingRecordEntity::getUpdatedAt, LocalDateTime.now()));
+        if (affected == 1) {
+            return Response.success();
+        }
+        if (affected != 0) {
+            throw new IllegalStateException("取消预订记录影响行数异常。");
+        }
+
+        // 未命中更新时才读取状态：隐藏其他用户记录，并让重复取消保持幂等；不修改支付或供应商状态。
+        BookingRecordEntity entity = requireOwned(owner, id);
+        if ("CANCELLED".equals(entity.getStatus())) {
+            return Response.success();
+        }
+        throw new BizException(BookingRecordErrorCode.INVALID_STATUS);
+    }
+
     /** 更新当前用户所属的预订记录，只覆盖请求中显式提供的字段。 */
     @Transactional
     public Response<BookingRecordVO> update(String userId, String bookingId, @Valid BookingRecordSaveForm form) {
@@ -114,6 +220,10 @@ public class BookingRecordService {
         BookingRecordEntity entity = requireOwned(owner, id);
         // 不允许通过普通更新改变内部身份或归属，空值表示保留原字段。
         copyNonNullProperties(form, entity);
+        if (form.getBizType() != null) {
+            // 编码与枚举类型不同，非空业务类型需要单独转换才能保持部分更新语义。
+            entity.setBizType(requireBookingType(form.getBizType()));
+        }
         validateDetail(entity.getDetail());
         validateTimeRange(entity.getStartTime(), entity.getEndTime());
         try {
@@ -175,7 +285,18 @@ public class BookingRecordService {
         }
         BookingRecordVO vo = new BookingRecordVO();
         BeanUtils.copyProperties(entity, vo);
+        // 接口继续返回业务编码，不能依赖 BeanUtils 在枚举和字符串之间自动转换。
+        vo.setBizType(entity.getBizType() == null ? null : entity.getBizType().getCode());
         return vo;
+    }
+
+    /** 将请求业务编码转换为实体枚举，不支持的编码按无效参数处理。 */
+    private static BookingType requireBookingType(String value) {
+        BookingType type = BookingType.of(required(value));
+        if (type == null) {
+            throw new BizException(BookingRecordErrorCode.INVALID_PARAMETER);
+        }
+        return type;
     }
 
     /** 查询并校验当前用户拥有的未删除记录。 */

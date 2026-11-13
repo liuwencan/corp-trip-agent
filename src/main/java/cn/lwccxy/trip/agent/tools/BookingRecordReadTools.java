@@ -25,7 +25,7 @@ public class BookingRecordReadTools {
     }
 
     /** 按预订单号、差旅单、类型或状态查询当前用户的正式预订记录。 */
-    @Tool(name = "query_booking_records", description = "查询当前登录用户的正式预订记录，可按 bookingId、travelOrderId、bizType 和 status 筛选。读取结果来自 booking_record，不能用于替代下单前的幂等预占检查。")
+    @Tool(name = "query_booking_records", description = "查询当前登录用户的正式预订记录，可按 bookingId、travelOrderId、bizType 和 status 筛选。读取结果来自 booking_record，可用于核实本地订单状态；查询未发现记录不能证明供应商未创建订单，结果不明确时应人工核实。")
     public String query(AgentRuntimeContext context,
                         @ToolParam(name = "bookingId", description = "内部预订单号，可选", required = false) String bookingId,
                         @ToolParam(name = "travelOrderId", description = "差旅单 ID，可选", required = false) String travelOrderId,

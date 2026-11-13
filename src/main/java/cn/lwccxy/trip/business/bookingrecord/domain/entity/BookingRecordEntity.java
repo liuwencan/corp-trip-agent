@@ -1,5 +1,6 @@
 package cn.lwccxy.trip.business.bookingrecord.domain.entity;
 
+import cn.lwccxy.trip.business.bookingrecord.domain.enums.BookingType;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -25,7 +26,7 @@ public class BookingRecordEntity {
     /** 关联差旅单 ID。 */
     private String travelOrderId;
     /** 预订业务类型。 */
-    private String bizType;
+    private BookingType bizType;
     /** 预订平台标识。 */
     private String platform;
     /** 外部平台主订单号。 */
