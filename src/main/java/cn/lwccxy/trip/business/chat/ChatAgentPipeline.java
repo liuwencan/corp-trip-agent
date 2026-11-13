@@ -152,6 +152,11 @@ public class ChatAgentPipeline {
             // 推理事件
             if (event.getType() == EventType.REASONING) {
                 String delta = event.getMessage().getTextContent();
+                if(event.isLast()){
+                    // 如果是最后一个事件不进行推送, 防止前端重复渲染
+                    return;
+                }
+
                 if (delta != null) {
                     answer.append(delta);
                 }
