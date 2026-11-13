@@ -15,7 +15,7 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * 智能差旅助手长期记忆
+ * 智能差旅助手长期记忆, 引入Redis做记忆缓存
  */
 public class CropTripLongTermMemory implements LongTermMemory {
 

@@ -1,5 +1,6 @@
 package cn.lwccxy.trip.agent.config;
 
+import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
 import cn.lwccxy.trip.agent.hooks.ConfirmationHook;
 import cn.lwccxy.trip.agent.hooks.LongTermMemoryRecordHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
@@ -31,6 +32,18 @@ public class CorpTripAgentHookConfig {
     @Bean
     public ModelUsageBillingHook modelUsageBillingHook() {
         return new ModelUsageBillingHook();
+    }
+
+    /**
+     * 创建 Agent 全链路执行监控 Hook。
+     *
+     * <p>该 Hook 只做观测，按 Agent 实例 ID 隔离运行状态，可安全地在多个 Agent 和多个会话之间共享。</p>
+     *
+     * @return Agent 全链路监控 Hook
+     */
+    @Bean
+    public AgentExecutionMonitorHook agentExecutionMonitorHook() {
+        return new AgentExecutionMonitorHook();
     }
 
     /** 创建审计长期记忆写入和检索行为的 Hook。 */

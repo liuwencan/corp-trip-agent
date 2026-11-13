@@ -20,8 +20,6 @@ public class AgentRuntimeContext {
     private volatile TripOrderVO cacheOrder;
     // 差旅政策按目的地城市区分，在单次 Agent 会话内复用查询结果。
     private final Map<String, String> travelPolicyByCity = new ConcurrentHashMap<>();
-    // 预订授权与查询状态跟随本次 Agent 调用生命周期。
-    private final BookingExecutionState bookingExecutionState = new BookingExecutionState();
 
     public AgentRuntimeContext(String userId, String sessionId, String traceId){
         this.userId = userId;
@@ -53,12 +51,6 @@ public class AgentRuntimeContext {
     public void setCacheOrder(TripOrderVO cacheOrder) {
         this.cacheOrder = cacheOrder;
     }
-
-    /** 获取本次 Agent 调用专属的预订流程状态。 */
-    public BookingExecutionState getBookingExecutionState() {
-        return bookingExecutionState;
-    }
-
 
     /**
      * 获取指定城市的会话级差旅政策缓存。

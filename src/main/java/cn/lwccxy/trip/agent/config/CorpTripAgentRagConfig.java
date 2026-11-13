@@ -15,6 +15,7 @@ import io.agentscope.core.rag.reader.ReaderInput;
 import io.agentscope.core.rag.reader.SplitStrategy;
 import io.agentscope.core.rag.reader.TextReader;
 import io.agentscope.core.rag.store.InMemoryStore;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.w3c.dom.Node;
@@ -38,17 +39,21 @@ public class CorpTripAgentRagConfig {
     private static final String POLICY_RESOURCE = "policy/corptrip_policy.docx";
     private static final String WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     private static final int EMBEDDING_DIMENSIONS = 1024;
-    private static final String DASHSCOPE_API_KEY_ENV = "DASHSCOPE_API_KEY";
 
     private final IntentUtteranceMapper intentUtteranceMapper;
+    private final String apiKey;
 
     /**
-     * 创建知识库配置并注入意图表达数据访问接口。
+     * 创建知识库配置，并注入意图表达数据访问接口和百炼密钥。
      *
      * @param intentUtteranceMapper 意图口语化表达 Mapper
+     * @param apiKey YAML 配置中的百炼 API Key
      */
-    public CorpTripAgentRagConfig(IntentUtteranceMapper intentUtteranceMapper) {
+    public CorpTripAgentRagConfig(IntentUtteranceMapper intentUtteranceMapper,
+                                 @Value("${corp.trip.bailian.dashscope-api}") String apiKey) {
+        // 知识库向量化与对话模型使用同一个配置项，避免凭据来源不一致。
         this.intentUtteranceMapper = intentUtteranceMapper;
+        this.apiKey = apiKey;
     }
 
 
@@ -166,18 +171,18 @@ public class CorpTripAgentRagConfig {
     }
 
     /**
-     * 从环境变量读取密钥并创建文本嵌入模型。
+     * 使用应用配置注入的百炼密钥创建文本嵌入模型。
      *
      * @param documentName 文档或知识库名称，用于错误定位
      * @return DashScope 文本嵌入模型
      */
     private EmbeddingModel createEmbeddingModel(String documentName) {
-        // 密钥只从运行环境读取，避免配置源码和资源文件保存凭证。
-        String apiKey = "sk-43f3ec833a874f91a52f757fd55b9b9d";
+        // 配置为空时及时报告配置项和知识库名称，避免使用无效凭据执行向量化。
         if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("环境变量 " + DASHSCOPE_API_KEY_ENV + " 未配置，无法初始化" + documentName + "知识库");
+            throw new IllegalStateException("配置 corp.trip.bailian.dashscope-api 未配置，无法初始化" + documentName + "知识库");
         }
 
+        // 复用统一配置中的密钥，保持知识库写入和检索使用相同的百炼凭据。
         return DashScopeTextEmbedding.builder()
                 .apiKey(apiKey)
                 .modelName("text-embedding-v3")

@@ -6,17 +6,15 @@ import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
 import cn.lwccxy.trip.agent.sse.SseEmitterSender;
 import cn.lwccxy.trip.business.conversation.enums.MessageRole;
 import cn.lwccxy.trip.business.conversation.service.ConversationService;
-import cn.lwccxy.trip.common.util.JsonUtil;
+import cn.lwccxy.trip.common.utils.JsonUtil;
 import io.agentscope.core.hook.Hook;
 import io.agentscope.core.hook.HookEvent;
-import io.agentscope.core.hook.PostActingEvent;
 import io.agentscope.core.hook.PostReasoningEvent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.ToolUseBlock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.LinkedHashMap;

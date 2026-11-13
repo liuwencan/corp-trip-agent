@@ -3,11 +3,12 @@ package cn.lwccxy.trip.agent;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
+import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.tools.AskUserTool;
-import cn.lwccxy.trip.agent.tools.UserInfoTools;
 import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
+import cn.lwccxy.trip.agent.tools.PolicyTools;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
 import io.agentscope.core.memory.autocontext.AutoContextMemory;
 import io.agentscope.core.model.ExecutionConfig;
@@ -52,7 +53,9 @@ public class GeneralInfoAgent {
     private final PersistSessionHook persistSessionHook;
     private final ProgressNotificationHook progressNotificationHook;
     private final ModelUsageBillingHook modelUsageBillingHook;
+    private final AgentExecutionMonitorHook agentExecutionMonitorHook;
     private final DestinationLiveTools destinationLiveTools;
+    private final PolicyTools policyTools;
 
 
 
@@ -70,7 +73,9 @@ public class GeneralInfoAgent {
                             @Qualifier("corptripGuidelinesKnowledge") Knowledge corptripGuidelinesKnowledge, @Qualifier("corptripPolicyKnowledge") Knowledge corptripPolicyKnowledge,
                             PersistSessionHook persistSessionHook, ProgressNotificationHook progressNotificationHook,
                             DestinationLiveTools destinationLiveTools,
-                            ModelUsageBillingHook modelUsageBillingHook) {
+                            PolicyTools policyTools,
+                            ModelUsageBillingHook modelUsageBillingHook,
+                            AgentExecutionMonitorHook agentExecutionMonitorHook) {
         this.dataSource = dataSource;
         this.model = model;
         this.weatherMcpClient = weatherMcpClient;
@@ -84,7 +89,9 @@ public class GeneralInfoAgent {
         this.persistSessionHook = persistSessionHook;
         this.progressNotificationHook = progressNotificationHook;
         this.modelUsageBillingHook = modelUsageBillingHook;
+        this.agentExecutionMonitorHook = agentExecutionMonitorHook;
         this.destinationLiveTools = destinationLiveTools;
+        this.policyTools = policyTools;
     }
 
 
@@ -103,9 +110,9 @@ public class GeneralInfoAgent {
         // 子智能体按工具调用所需任务独立响应，主智能体负责选择和组合它们的结果。
         Toolkit toolkit = new Toolkit();
 //        toolkit.registerTool(new AskUserTool());
-        toolkit.registerTool(new UserInfoTools());
         // 通用信息查询与行程规划共享同一套目的地天气和最新资讯工具。
         toolkit.registerTool(destinationLiveTools);
+        toolkit.registerTool(policyTools);
 
         // 只将配置明确允许的天气 MCP 工具注册到 Agent；空配置时跳过注册，避免空名单退化为全量开放。
         if (weatherMcpClient != null && !enabledWeatherTools.isEmpty()) {
@@ -136,7 +143,8 @@ public class GeneralInfoAgent {
                 .knowledge(corptripGuidelinesKnowledge).knowledge(corptripPolicyKnowledge) // 添加 差旅政策/差旅指南 知识库d
                 .ragMode(RAGMode.AGENTIC)
                 .memory(new AutoContextMemory(autoContextConfig, model))
-                .hooks(List.of(persistSessionHook, progressNotificationHook, modelUsageBillingHook))
+                .hooks(List.of(persistSessionHook, agentExecutionMonitorHook,
+                        progressNotificationHook, modelUsageBillingHook))
                 .build();
     }
 }

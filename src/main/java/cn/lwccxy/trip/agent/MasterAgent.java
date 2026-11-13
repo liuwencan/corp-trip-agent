@@ -2,15 +2,13 @@ package cn.lwccxy.trip.agent;
 
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
+import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
 import cn.lwccxy.trip.agent.hooks.ConfirmationHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
 import cn.lwccxy.trip.agent.tools.AskUserTool;
-import cn.lwccxy.trip.agent.tools.ProviderApiKeyTools;
-import cn.lwccxy.trip.agent.tools.UserInfoTools;
-import cn.lwccxy.trip.common.util.SpringContextUtil;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
 import io.agentscope.core.memory.autocontext.AutoContextHook;
 import io.agentscope.core.memory.autocontext.AutoContextMemory;
@@ -18,13 +16,10 @@ import io.agentscope.core.model.Model;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.tool.ToolExecutionContext;
 import io.agentscope.core.tool.Toolkit;
-import io.agentscope.core.tool.mcp.McpClientBuilder;
 import io.agentscope.core.tool.mcp.McpClientWrapper;
 import io.agentscope.core.tool.subagent.SubAgentConfig;
-import io.agentscope.core.tool.subagent.SubAgentProvider;
 import io.agentscope.core.tool.subagent.SubAgentTool;
 
-import io.modelcontextprotocol.spec.McpSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
@@ -32,16 +27,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 import org.springframework.core.io.ClassPathResource;
-import reactor.core.publisher.Mono;
 
 import javax.sql.DataSource;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 
 /** 配置主智能体，并将差旅领域子智能体注册为可调用工具。 */
 @Configuration("masterAgentConfiguration")
@@ -60,14 +51,20 @@ public class MasterAgent {
     private final McpClientWrapper weatherMcpClient;
     private final ConfirmationHook confirmationHook;
     private final ProgressNotificationHook progressNotificationHook;
+    private final AgentExecutionMonitorHook agentExecutionMonitorHook;
     private final String masterAgentPrompt;
 
-    /** 创建主智能体配置。 */
+    /**
+     * 创建主智能体配置。
+     *
+     * @param agentExecutionMonitorHook 全链路执行监控 Hook，用于记录各 Agent 的调用节点耗时
+     */
     public MasterAgent(DataSource dataSource, Model model, ApplicationContext applicationContext,
                        SseEmitterRegistry sseEmitterRegistry, PersistSessionHook persistSessionHook,
                        McpClientWrapper weatherMcpClient, ConfirmationHook confirmationHook,
                        ProgressNotificationHook progressNotificationHook,
-                       ModelUsageBillingHook modelUsageBillingHook) {
+                       ModelUsageBillingHook modelUsageBillingHook,
+                       AgentExecutionMonitorHook agentExecutionMonitorHook) {
         this.dataSource = dataSource;
         this.model = model;
         this.applicationContext = applicationContext;
@@ -77,6 +74,7 @@ public class MasterAgent {
         this.weatherMcpClient = weatherMcpClient;
         this.confirmationHook = confirmationHook;
         this.progressNotificationHook = progressNotificationHook;
+        this.agentExecutionMonitorHook = agentExecutionMonitorHook;
         this.masterAgentPrompt = loadMasterAgentPrompt();
     }
 
@@ -111,6 +109,8 @@ public class MasterAgent {
         // =================== 子智能体装配 ========================
         // 每次Build主智能体的时候都要重Spring上下文中取出对应的子Agent, 这样才能做多租户隔离
         ReActAgent generalInfoAgent = applicationContext.getBean("generalInfoAgent", ReActAgent.class);
+        // 预订 Agent 单独处理途牛供应商订单，不与出差申请单的写入流程混用。
+        ReActAgent bookingAgent = applicationContext.getBean("bookingAgent", ReActAgent.class);
         // 行程单管理 Agent 同样按本次会话创建，避免不同会话共享运行时状态。
         ReActAgent tripOrderAgent = applicationContext.getBean("orderManagementAgent", ReActAgent.class);
         // 行程规划 Agent 只生成候选方案，不拥有预订或业务数据写入工具。
@@ -131,6 +131,12 @@ public class MasterAgent {
                 .forwardEvents(false)
                 .build();
         toolkit.registerAgentTool(new SubAgentTool(() -> tripOrderAgent, tripOrderConfig));
+        SubAgentConfig bookingConfig = SubAgentConfig.builder()
+                .toolName("BookingAgent")
+                .description("负责查询并比较机票、火车票和酒店选项；仅在用户明确确认具体方案后执行供应商预订")
+                .forwardEvents(false)
+                .build();
+        toolkit.registerAgentTool(new SubAgentTool(() -> bookingAgent, bookingConfig));
         SubAgentConfig itineraryPlanningConfig = SubAgentConfig.builder()
                 .toolName("ItineraryPlanningAgent")
                 .description("负责根据出差目标和用户约束规划交通、住宿及日程候选方案，指出信息缺口、假设和取舍；不查询实时资源或预订")
@@ -157,7 +163,8 @@ public class MasterAgent {
                 .toolkit(toolkit)
                 .toolExecutionContext(context)
                 .hooks(List.of(new AutoContextHook(), confirmationHook, persistSessionHook,
-                        progressNotificationHook, modelUsageBillingHook))
+                        // 全链路监控放在进度推送之前，保证统计到的是推送前的真实耗时。
+                        agentExecutionMonitorHook, progressNotificationHook, modelUsageBillingHook))
                 .memory(new AutoContextMemory(autoContextConfig, model)) // AgentScope的六层上下文压缩机制
                 .build();
 

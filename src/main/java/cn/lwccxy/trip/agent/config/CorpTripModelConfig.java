@@ -3,6 +3,7 @@ package cn.lwccxy.trip.agent.config;
 import io.agentscope.core.formatter.dashscope.DashScopeChatFormatter;
 import io.agentscope.core.formatter.openai.DeepSeekFormatter;
 import io.agentscope.core.model.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -14,7 +15,17 @@ import org.springframework.context.annotation.Primary;
 @Configuration
 public class CorpTripModelConfig {
 
-    private final static String apiKey = "sk-43f3ec833a874f91a52f757fd55b9b9d";
+    private final String apiKey;
+
+    /**
+     * 从应用配置注入百炼密钥，供对话模型统一使用。
+     *
+     * @param apiKey YAML 配置中的百炼 API Key
+     */
+    public CorpTripModelConfig(@Value("${corp.trip.bailian.dashscope-api}") String apiKey) {
+        // 统一使用配置提供的凭据，避免在模型创建逻辑中保留密钥字面量。
+        this.apiKey = apiKey;
+    }
 
     /**
      * 推理能力比较强的模型
@@ -25,12 +36,13 @@ public class CorpTripModelConfig {
     @Bean("strongModel")
     @Primary
     public Model strongModel(){
+        // 强推理模型复用从应用配置注入的百炼密钥。
         Model model =
                 DashScopeChatModel.builder()
                         .apiKey(apiKey)
-                        .modelName("deepseek-v4-pro-0813")
+                        .modelName("kimi-k3.1-pro")
                         .stream(true) // 是否流式输出
-//                        .endpointType(EndpointType.MULTIMODAL)
+                        .endpointType(EndpointType.MULTIMODAL)
                         .formatter(new DashScopeChatFormatter())
                         .build();
         return model;
@@ -43,10 +55,11 @@ public class CorpTripModelConfig {
      */
     @Bean("lightWeightModel")
     public Model lightWeightModel(){
+        // 轻量模型与强推理模型使用同一配置来源，便于统一更换密钥。
         Model model =
                 DashScopeChatModel.builder()
                         .apiKey(apiKey)
-                        .modelName("deepseek-v4-pro-0813")
+                        .modelName("kimi-k3.1-pro")
                         .stream(true) // 是否流式输出
                         .endpointType(EndpointType.MULTIMODAL) // 使用多模态端点
                         .build();
