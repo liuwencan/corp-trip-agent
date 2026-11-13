@@ -3,22 +3,29 @@ package cn.lwccxy.trip.agent;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
+import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.hooks.LongTermMemoryRecordHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
+import cn.lwccxy.trip.agent.hooks.SkillContentCollapseHook;
 import cn.lwccxy.trip.agent.hooks.TuniuApiKeyShellHook;
 import cn.lwccxy.trip.agent.hooks.TuniuShellCommandValidator;
 import cn.lwccxy.trip.agent.hooks.TuniuSearchResultHook;
 import cn.lwccxy.trip.agent.hooks.TuniuSearchResultCaptureHook;
+import cn.lwccxy.trip.agent.memory.CropTripLongTermMemory;
 import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
 import cn.lwccxy.trip.agent.tools.ItineraryPlanDesignTools;
+import cn.lwccxy.trip.agent.tools.ItineraryReviewTools;
 import cn.lwccxy.trip.agent.tools.ItineraryPlanReadTools;
+import cn.lwccxy.trip.agent.tools.PolicyTools;
 import cn.lwccxy.trip.agent.tools.ProviderApiKeyTools;
 import cn.lwccxy.trip.agent.tools.TripOrderReadTools;
+import cn.lwccxy.trip.common.utils.RedisCacheUtil;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.memory.LongTermMemory;
 import io.agentscope.core.memory.LongTermMemoryMode;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
+import io.agentscope.core.memory.autocontext.AutoContextHook;
 import io.agentscope.core.memory.autocontext.AutoContextMemory;
 import io.agentscope.core.memory.bailian.BailianLongTermMemory;
 import io.agentscope.core.memory.mem0.Mem0ApiType;
@@ -60,10 +67,12 @@ public class ItineraryPlanningAgent {
     private final PersistSessionHook persistSessionHook;
     private final ProgressNotificationHook progressNotificationHook;
     private final ModelUsageBillingHook modelUsageBillingHook;
+    private final AgentExecutionMonitorHook agentExecutionMonitorHook;
     private final LongTermMemoryRecordHook longTermMemoryRecordHook;
     private final TuniuApiKeyShellHook tuniuApiKeyShellHook;
     private final TuniuSearchResultHook tuniuSearchResultHook;
     private final TuniuSearchResultCaptureHook tuniuSearchResultCaptureHook;
+    private final SkillContentCollapseHook skillContentCollapseHook;
     private final McpClientWrapper weatherMcpClient;
     private final List<String> enabledWeatherTools;
     private final DestinationLiveTools destinationLiveTools;
@@ -75,7 +84,9 @@ public class ItineraryPlanningAgent {
     private final TripOrderReadTools tripOrderReadTools;
     private final ItineraryPlanDesignTools itineraryPlanDesignTools;
     private final ItineraryPlanReadTools itineraryPlanReadTools;
-
+    private final ItineraryReviewTools itineraryReviewTools;
+    private final PolicyTools policyTools;
+    private final RedisCacheUtil redisCache;
 
     /**
      * 创建行程规划智能体配置。
@@ -90,23 +101,30 @@ public class ItineraryPlanningAgent {
                                   DestinationLiveTools destinationLiveTools, AgentSkillRepository agentSkillRepository,
                                   ProviderApiKeyTools providerApiKeyTools,
                                   ModelUsageBillingHook modelUsageBillingHook,
+                                  AgentExecutionMonitorHook agentExecutionMonitorHook,
                                   LongTermMemoryRecordHook longTermMemoryRecordHook,
                                   TuniuApiKeyShellHook tuniuApiKeyShellHook,
                                   TuniuSearchResultHook tuniuSearchResultHook,
                                   TuniuSearchResultCaptureHook tuniuSearchResultCaptureHook,
+                                  SkillContentCollapseHook skillContentCollapseHook,
                                   @Value("${corp.trip.bailian.dashscope-api}") String dashscopeApiKey,
                                   @Value("${corp.trip.bailian.memory-library-id}") String memoryLibraryId,
                                   TripOrderReadTools tripOrderReadTools,
                                   ItineraryPlanDesignTools itineraryPlanDesignTools,
-                                  ItineraryPlanReadTools itineraryPlanReadTools) {
+                                  ItineraryPlanReadTools itineraryPlanReadTools,
+                                  ItineraryReviewTools itineraryReviewTools,
+                                  PolicyTools policyTools,
+                                  RedisCacheUtil redisCache) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
         this.progressNotificationHook = progressNotificationHook;
         this.modelUsageBillingHook = modelUsageBillingHook;
+        this.agentExecutionMonitorHook = agentExecutionMonitorHook;
         this.longTermMemoryRecordHook = longTermMemoryRecordHook;
         this.tuniuApiKeyShellHook = tuniuApiKeyShellHook;
         this.tuniuSearchResultHook = tuniuSearchResultHook;
         this.tuniuSearchResultCaptureHook = tuniuSearchResultCaptureHook;
+        this.skillContentCollapseHook = skillContentCollapseHook;
         this.weatherMcpClient = weatherMcpClient;
         // 清理配置中的空格和空项，防止它们影响 MCP 工具名精确匹配。
         this.enabledWeatherTools = enabledWeatherTools == null ? List.of() : enabledWeatherTools.stream()
@@ -122,6 +140,9 @@ public class ItineraryPlanningAgent {
         this.tripOrderReadTools = tripOrderReadTools;
         this.itineraryPlanDesignTools = itineraryPlanDesignTools;
         this.itineraryPlanReadTools = itineraryPlanReadTools;
+        this.itineraryReviewTools = itineraryReviewTools;
+        this.policyTools = policyTools;
+        this.redisCache = redisCache;
     }
 
     /** 为当前业务会话创建隔离的行程规划智能体。 */
@@ -143,6 +164,9 @@ public class ItineraryPlanningAgent {
         toolkit.registerTool(tripOrderReadTools); // 出差行程单读取工具
         toolkit.registerTool(itineraryPlanDesignTools); // 行程方案设计入口
         toolkit.registerTool(itineraryPlanReadTools); // 读取途牛搜索结果并转换为规划候选
+        toolkit.registerTool(itineraryReviewTools); // 审核已生成的代表方案
+        toolkit.registerTool(policyTools); // 差旅政策查询与校验
+        toolkit.registerTool(itineraryReviewTools); // 审核已生成的代表方案
         // 只注册 YAML 白名单中的天气 MCP 工具；空名单时跳过注册，避免空名单退化为全量开放。
         if (weatherMcpClient != null && !enabledWeatherTools.isEmpty()) {
             toolkit.registration().mcpClient(weatherMcpClient).enableTools(enabledWeatherTools);
@@ -172,13 +196,16 @@ public class ItineraryPlanningAgent {
                 .skillBox(skillBox)
                 .planNotebook(planNotebook)
                 .toolExecutionContext(context)
+                .maxIters(100)
                 .toolExecutionConfig(ExecutionConfig.builder()
                         .timeout(Duration.ofMinutes(30)).build()) // 工具执行超时配置
                 .memory(new AutoContextMemory(autoContextConfig, model))
                 // 搜索结果在通知及持久化前精简，确保后续模型推理读取替换后的消息。
+                // skillContentCollapseHook 在推理前折叠历史技能正文，避免每轮重放整份 SKILL.md。
                 .hooks(List.of(persistSessionHook, tuniuApiKeyShellHook, tuniuSearchResultHook,
-                        tuniuSearchResultCaptureHook,
-                        progressNotificationHook, modelUsageBillingHook, longTermMemoryRecordHook))
+                        tuniuSearchResultCaptureHook, skillContentCollapseHook,
+                        progressNotificationHook, modelUsageBillingHook, longTermMemoryRecordHook,
+                        agentExecutionMonitorHook, new AutoContextHook()))
                 .longTermMemory(longTermMemory)
                 .longTermMemoryMode(LongTermMemoryMode.AGENT_CONTROL) // AGENT_CONTROL模式：给Agent提供两个工具（检索/存储）由Agent决定何时调用工具进行存储长期记忆, 以及召回用户长期记忆
                 .build();
@@ -220,22 +247,24 @@ public class ItineraryPlanningAgent {
         String userId = agentRuntimeContext.getUserId();
 
         // 使用当前认证用户作为记忆归属，避免不同用户共享长期记忆数据。
-//        return BailianLongTermMemory.builder()
-//                .apiKey(dashscopeApiKey)
-//                .userId(userId)
-//                .memoryLibraryId(memoryLibraryId)
-//                .metadata(Map.of("source", "corp-trip"))
-//                .topK(20)
-//                .build();
-
-        // 使用自建 Mem0，需要指定 apiType 为 Mem0ApiType.SELF_HOSTED
-        Mem0LongTermMemory customMem0LongTermMemory = Mem0LongTermMemory.builder()
-                .agentName("SmartAssistant")
+        BailianLongTermMemory longTermMemory = BailianLongTermMemory.builder()
+                .apiKey(dashscopeApiKey)
                 .userId(userId)
-                .timeout(Duration.ofMinutes(30))
-                .apiBaseUrl("http://localhost:8888")  // 自建 Mem0 服务地址
-                .apiType(Mem0ApiType.SELF_HOSTED)  // 指定为自建 Mem0
+                .memoryLibraryId(memoryLibraryId)
+                .metadata(Map.of("source", "corp-trip"))
+                .topK(20)
                 .build();
-        return customMem0LongTermMemory;
+
+        CropTripLongTermMemory cropTripLongTermMemory = new CropTripLongTermMemory(longTermMemory, redisCache, userId);
+//        // 使用自建 Mem0，需要指定 apiType 为 Mem0ApiType.SELF_HOSTED
+//        Mem0LongTermMemory customMem0LongTermMemory = Mem0LongTermMemory.builder()
+//                .agentName("SmartAssistant")
+
+//                .userId(userId)
+//                .timeout(Duration.ofMinutes(30))
+//                .apiBaseUrl("http://localhost:8888")  // 自建 Mem0 服务地址
+//                .apiType(Mem0ApiType.SELF_HOSTED)  // 指定为自建 Mem0
+//                .build();
+        return cropTripLongTermMemory;
     }
 }

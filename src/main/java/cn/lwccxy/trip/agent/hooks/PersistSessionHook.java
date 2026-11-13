@@ -45,8 +45,10 @@ public class PersistSessionHook implements Hook {
             AgentRuntimeContext runtimeContext =
                     contextView.getOrDefault("agentRuntimeContext", null);
 
-            String sessionId = runtimeContext.getSessionId();
-            if(sessionId == null){
+            String sessionId = null;
+            if (runtimeContext != null) {
+                sessionId = runtimeContext.getSessionId();
+            }else{
                 // 获取不到sessionId直接短路
                 return Mono.just(event);
             }

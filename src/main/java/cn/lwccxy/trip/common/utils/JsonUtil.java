@@ -1,4 +1,4 @@
-package cn.lwccxy.trip.common.util;
+package cn.lwccxy.trip.common.utils;
 
 import com.alibaba.fastjson2.JSON;
 

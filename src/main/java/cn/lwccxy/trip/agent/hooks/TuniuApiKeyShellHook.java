@@ -13,15 +13,16 @@ import reactor.core.publisher.Mono;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
-/** 在行程规划智能体执行途牛 CLI 命令前注入当前用户的 API Key。 */
+/** 在行程规划或预订智能体执行途牛 CLI 命令前注入当前用户的 API Key。 */
 @Component
 public class TuniuApiKeyShellHook implements Hook {
 
     private static final Logger logger = LoggerFactory.getLogger(TuniuApiKeyShellHook.class);
     private static final int HOOK_PRIORITY = 10;
-    private static final String TARGET_AGENT = "ItineraryPlanningAgent";
+    private static final Set<String> TARGET_AGENTS = Set.of("ItineraryPlanningAgent", "BookingAgent");
     private static final String SHELL_TOOL = "execute_shell_command";
     private static final String COMMAND_ARGUMENT = "command";
     private static final Pattern TUNIU_CALL_PATTERN = Pattern.compile("(?i)(?<![\\w./-])tuniu\\s+call\\b");
@@ -54,7 +55,7 @@ public class TuniuApiKeyShellHook implements Hook {
     @Override
     public <T extends HookEvent> Mono<T> onEvent(T event) {
         if (!(event instanceof PreActingEvent actingEvent)
-                || !TARGET_AGENT.equals(event.getAgent().getName())) {
+                || !isTargetAgent(event.getAgent().getName())) {
             return Mono.just(event);
         }
 
@@ -105,6 +106,11 @@ public class TuniuApiKeyShellHook implements Hook {
                 return Mono.error(new IllegalStateException("当前会话用户信息无效，无法调用途牛服务"));
             }
         });
+    }
+
+    /** 判断途牛凭证注入是否适用于当前执行工具调用的智能体。 */
+    static boolean isTargetAgent(String agentName) {
+        return TARGET_AGENTS.contains(agentName);
     }
 
     /**

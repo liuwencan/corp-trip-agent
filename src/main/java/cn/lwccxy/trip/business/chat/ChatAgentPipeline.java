@@ -1,6 +1,5 @@
 package cn.lwccxy.trip.business.chat;
 
-import cn.lwccxy.trip.agent.MasterAgent;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.enums.IntentType;
@@ -20,11 +19,10 @@ import cn.lwccxy.trip.business.conversation.mapper.MessageMapper;
 import cn.lwccxy.trip.business.conversation.service.ConversationCoordinator;
 import cn.lwccxy.trip.business.conversation.service.ConversationService;
 import cn.lwccxy.trip.common.exception.BizException;
-import cn.lwccxy.trip.common.response.Response;
 import cn.lwccxy.trip.agent.enums.SseEventEnum;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
 import cn.lwccxy.trip.agent.sse.SseEmitterSender;
-import cn.lwccxy.trip.common.util.SpringContextUtil;
+import cn.lwccxy.trip.common.utils.SpringContextUtil;
 import com.alibaba.fastjson2.JSON;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.agent.Event;

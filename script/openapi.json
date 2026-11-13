@@ -1,0 +1,4351 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "API Documentation",
+    "version" : "1.0"
+  },
+  "paths" : {
+    "/chat/chat" : {
+      "post" : {
+        "summary" : "chat",
+        "description" : "chat",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "conversationId", "question" ],
+                "type" : "object",
+                "properties" : {
+                  "question" : {
+                    "maxLength" : 20000,
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "conversationId" : {
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "description" : "",
+                    "format" : "int64"
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "timeout" : {
+                      "type" : "integer",
+                      "description" : "",
+                      "format" : "int64",
+                      "nullable" : true
+                    },
+                    "handler" : {
+                      "type" : "object",
+                      "properties" : { },
+                      "description" : "",
+                      "nullable" : true
+                    },
+                    "earlySendAttempts" : {
+                      "type" : "array",
+                      "description" : "",
+                      "items" : {
+                        "type" : "object",
+                        "properties" : {
+                          "data" : {
+                            "type" : "object",
+                            "properties" : { },
+                            "description" : ""
+                          },
+                          "mediaType" : {
+                            "type" : "object",
+                            "properties" : {
+                              "type" : {
+                                "type" : "string",
+                                "description" : ""
+                              },
+                              "subtype" : {
+                                "type" : "string",
+                                "description" : ""
+                              },
+                              "parameters" : {
+                                "type" : "object",
+                                "properties" : {
+                                  "key" : {
+                                    "type" : "string"
+                                  }
+                                },
+                                "description" : ""
+                              },
+                              "toStringValue" : {
+                                "type" : "string",
+                                "description" : "",
+                                "nullable" : true
+                              }
+                            },
+                            "description" : "",
+                            "nullable" : true
+                          }
+                        },
+                        "description" : "org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter.DataWithMediaType"
+                      }
+                    },
+                    "complete" : {
+                      "type" : "boolean",
+                      "description" : ""
+                    },
+                    "failure" : {
+                      "type" : "object",
+                      "properties" : {
+                        "detailMessage" : {
+                          "type" : "string",
+                          "description" : "Specific details about the Throwable.  For example, for\n{@code FileNotFoundException}, this contains the name of\nthe file that could not be found."
+                        },
+                        "cause" : {
+                          "type" : "object",
+                          "properties" : {
+                            "detailMessage" : {
+                              "type" : "string",
+                              "description" : "Specific details about the Throwable.  For example, for\n{@code FileNotFoundException}, this contains the name of\nthe file that could not be found."
+                            },
+                            "cause" : {
+                              "type" : "object",
+                              "properties" : { },
+                              "description" : "The throwable that caused this throwable to get thrown, or null if this\nthrowable was not caused by another throwable, or if the causative\nthrowable is unknown.  If this field is equal to this throwable itself,\nit indicates that the cause of this throwable has not yet been\ninitialized.",
+                              "default" : "this"
+                            },
+                            "stackTrace" : {
+                              "type" : "array",
+                              "description" : "The stack trace, as returned by{@link #getStackTrace()}.\n\nThe field is initialized to a zero-length array.  A{@code\n    * null} value of this field indicates subsequent calls to{@link\n    * #setStackTrace(StackTraceElement[])} and{@link\n    * #fillInStackTrace()} will be no-ops.",
+                              "items" : {
+                                "type" : "object",
+                                "properties" : {
+                                  "classLoaderName" : {
+                                    "type" : "string",
+                                    "description" : "The name of the class loader."
+                                  },
+                                  "moduleName" : {
+                                    "type" : "string",
+                                    "description" : "The module name."
+                                  },
+                                  "moduleVersion" : {
+                                    "type" : "string",
+                                    "description" : "The module version."
+                                  },
+                                  "declaringClass" : {
+                                    "type" : "string",
+                                    "description" : "The declaring class."
+                                  },
+                                  "methodName" : {
+                                    "type" : "string",
+                                    "description" : "The method name."
+                                  },
+                                  "fileName" : {
+                                    "type" : "string",
+                                    "description" : "The source file name."
+                                  },
+                                  "lineNumber" : {
+                                    "type" : "integer",
+                                    "description" : "The source line number."
+                                  },
+                                  "format" : {
+                                    "maximum" : 128,
+                                    "minimum" : -127,
+                                    "type" : "integer",
+                                    "description" : "Control to show full or partial module, package, and class names.",
+                                    "default" : "0"
+                                  }
+                                }
+                              },
+                              "default" : "new StackTraceElement[0]"
+                            },
+                            "suppressedExceptions" : {
+                              "type" : "array",
+                              "description" : "The list of suppressed exceptions, as returned by{@link\n    * #getSuppressed()}.  The list is initialized to a zero-element\nunmodifiable sentinel list.  When a serialized Throwable is\nread in, if the{@code suppressedExceptions} field points to a\nzero-element list, the field is reset to the sentinel value.",
+                              "items" : {
+                                "type" : "object",
+                                "properties" : { },
+                                "description" : "java.lang.Throwable"
+                              },
+                              "default" : "Collections.emptyList()"
+                            }
+                          },
+                          "description" : "The throwable that caused this throwable to get thrown, or null if this\nthrowable was not caused by another throwable, or if the causative\nthrowable is unknown.  If this field is equal to this throwable itself,\nit indicates that the cause of this throwable has not yet been\ninitialized.",
+                          "default" : "this"
+                        },
+                        "stackTrace" : {
+                          "type" : "array",
+                          "description" : "The stack trace, as returned by{@link #getStackTrace()}.\n\nThe field is initialized to a zero-length array.  A{@code\n    * null} value of this field indicates subsequent calls to{@link\n    * #setStackTrace(StackTraceElement[])} and{@link\n    * #fillInStackTrace()} will be no-ops.",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : {
+                              "classLoaderName" : {
+                                "type" : "string",
+                                "description" : "The name of the class loader."
+                              },
+                              "moduleName" : {
+                                "type" : "string",
+                                "description" : "The module name."
+                              },
+                              "moduleVersion" : {
+                                "type" : "string",
+                                "description" : "The module version."
+                              },
+                              "declaringClass" : {
+                                "type" : "string",
+                                "description" : "The declaring class."
+                              },
+                              "methodName" : {
+                                "type" : "string",
+                                "description" : "The method name."
+                              },
+                              "fileName" : {
+                                "type" : "string",
+                                "description" : "The source file name."
+                              },
+                              "lineNumber" : {
+                                "type" : "integer",
+                                "description" : "The source line number."
+                              },
+                              "format" : {
+                                "maximum" : 128,
+                                "minimum" : -127,
+                                "type" : "integer",
+                                "description" : "Control to show full or partial module, package, and class names.",
+                                "default" : "0"
+                              }
+                            }
+                          },
+                          "default" : "new StackTraceElement[0]"
+                        },
+                        "suppressedExceptions" : {
+                          "type" : "array",
+                          "description" : "The list of suppressed exceptions, as returned by{@link\n    * #getSuppressed()}.  The list is initialized to a zero-element\nunmodifiable sentinel list.  When a serialized Throwable is\nread in, if the{@code suppressedExceptions} field points to a\nzero-element list, the field is reset to the sentinel value.",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : {
+                              "detailMessage" : {
+                                "type" : "string",
+                                "description" : "Specific details about the Throwable.  For example, for\n{@code FileNotFoundException}, this contains the name of\nthe file that could not be found."
+                              },
+                              "cause" : {
+                                "type" : "object",
+                                "properties" : { },
+                                "description" : "The throwable that caused this throwable to get thrown, or null if this\nthrowable was not caused by another throwable, or if the causative\nthrowable is unknown.  If this field is equal to this throwable itself,\nit indicates that the cause of this throwable has not yet been\ninitialized.",
+                                "default" : "this"
+                              },
+                              "stackTrace" : {
+                                "type" : "array",
+                                "description" : "The stack trace, as returned by{@link #getStackTrace()}.\n\nThe field is initialized to a zero-length array.  A{@code\n    * null} value of this field indicates subsequent calls to{@link\n    * #setStackTrace(StackTraceElement[])} and{@link\n    * #fillInStackTrace()} will be no-ops.",
+                                "items" : {
+                                  "type" : "object",
+                                  "properties" : {
+                                    "classLoaderName" : {
+                                      "type" : "string",
+                                      "description" : "The name of the class loader."
+                                    },
+                                    "moduleName" : {
+                                      "type" : "string",
+                                      "description" : "The module name."
+                                    },
+                                    "moduleVersion" : {
+                                      "type" : "string",
+                                      "description" : "The module version."
+                                    },
+                                    "declaringClass" : {
+                                      "type" : "string",
+                                      "description" : "The declaring class."
+                                    },
+                                    "methodName" : {
+                                      "type" : "string",
+                                      "description" : "The method name."
+                                    },
+                                    "fileName" : {
+                                      "type" : "string",
+                                      "description" : "The source file name."
+                                    },
+                                    "lineNumber" : {
+                                      "type" : "integer",
+                                      "description" : "The source line number."
+                                    },
+                                    "format" : {
+                                      "maximum" : 128,
+                                      "minimum" : -127,
+                                      "type" : "integer",
+                                      "description" : "Control to show full or partial module, package, and class names.",
+                                      "default" : "0"
+                                    }
+                                  }
+                                },
+                                "default" : "new StackTraceElement[0]"
+                              },
+                              "suppressedExceptions" : {
+                                "type" : "array",
+                                "description" : "The list of suppressed exceptions, as returned by{@link\n    * #getSuppressed()}.  The list is initialized to a zero-element\nunmodifiable sentinel list.  When a serialized Throwable is\nread in, if the{@code suppressedExceptions} field points to a\nzero-element list, the field is reset to the sentinel value.",
+                                "items" : {
+                                  "type" : "object",
+                                  "properties" : { },
+                                  "description" : "java.lang.Throwable"
+                                },
+                                "default" : "Collections.emptyList()"
+                              }
+                            },
+                            "description" : "java.lang.Throwable"
+                          },
+                          "default" : "Collections.emptyList()"
+                        }
+                      },
+                      "description" : "",
+                      "nullable" : true
+                    },
+                    "timeoutCallback" : {
+                      "type" : "object",
+                      "properties" : {
+                        "delegates" : {
+                          "type" : "array",
+                          "description" : "",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : { },
+                            "description" : "java.lang.Runnable"
+                          }
+                        }
+                      },
+                      "description" : ""
+                    },
+                    "errorCallback" : {
+                      "type" : "object",
+                      "properties" : { },
+                      "description" : ""
+                    },
+                    "completionCallback" : {
+                      "type" : "object",
+                      "properties" : {
+                        "delegates" : {
+                          "type" : "array",
+                          "description" : "",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : { },
+                            "description" : "java.lang.Runnable"
+                          }
+                        }
+                      },
+                      "description" : ""
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/conversations" : {
+      "get" : {
+        "summary" : "list",
+        "description" : "list",
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "required" : [ "pageNo", "pageSize", "status" ],
+                "type" : "object",
+                "properties" : {
+                  "pageNo" : {
+                    "maximum" : 2147483647,
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "format" : "int64",
+                    "nullable" : false,
+                    "default" : 1
+                  },
+                  "pageSize" : {
+                    "maximum" : 100,
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "format" : "int64",
+                    "nullable" : false,
+                    "default" : 20
+                  },
+                  "status" : {
+                    "pattern" : "ACTIVE|ARCHIVED|CLOSED|ALL",
+                    "type" : "string",
+                    "nullable" : false,
+                    "default" : "ACTIVE"
+                  }
+                }
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "array",
+                      "description" : "响应数据",
+                      "items" : {
+                        "type" : "object",
+                        "properties" : {
+                          "id" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "title" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "status" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "messageCount" : {
+                            "type" : "integer",
+                            "description" : ""
+                          },
+                          "createTime" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "updateTime" : {
+                            "type" : "string",
+                            "description" : ""
+                          }
+                        },
+                        "description" : "cn.lwccxy.trip.business.conversation.domain.vo.ConversationVO"
+                      }
+                    },
+                    "pageNo" : {
+                      "type" : "integer",
+                      "description" : "当前页码",
+                      "format" : "int64"
+                    },
+                    "totalCount" : {
+                      "type" : "integer",
+                      "description" : "总数据量",
+                      "format" : "int64"
+                    },
+                    "pageSize" : {
+                      "type" : "integer",
+                      "description" : "每页展示的数据量",
+                      "format" : "int64"
+                    },
+                    "totalPage" : {
+                      "type" : "integer",
+                      "description" : "总页数",
+                      "format" : "int64"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "summary" : "create",
+        "description" : "create",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "title" : {
+                    "maxLength" : 200,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "title" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "status" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "messageCount" : {
+                          "type" : "integer",
+                          "description" : ""
+                        },
+                        "createTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updateTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/conversations/{conversationId}" : {
+      "get" : {
+        "summary" : "detail",
+        "description" : "detail",
+        "parameters" : [ {
+          "name" : "conversationId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "title" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "status" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "messageCount" : {
+                          "type" : "integer",
+                          "description" : ""
+                        },
+                        "createTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updateTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "summary" : "update",
+        "description" : "update",
+        "parameters" : [ {
+          "name" : "conversationId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "title" : {
+                    "maxLength" : 200,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "status" : {
+                    "pattern" : "ACTIVE|ARCHIVED|CLOSED",
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "title" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "status" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "messageCount" : {
+                          "type" : "integer",
+                          "description" : ""
+                        },
+                        "createTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updateTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/conversations/{conversationId}/messages" : {
+      "get" : {
+        "summary" : "history",
+        "description" : "history",
+        "parameters" : [ {
+          "name" : "conversationId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "required" : [ "pageNo", "pageSize" ],
+                "type" : "object",
+                "properties" : {
+                  "pageNo" : {
+                    "maximum" : 2147483647,
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "format" : "int64",
+                    "nullable" : false,
+                    "default" : 1
+                  },
+                  "pageSize" : {
+                    "maximum" : 100,
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "format" : "int64",
+                    "nullable" : false,
+                    "default" : 20
+                  }
+                }
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "array",
+                      "description" : "响应数据",
+                      "items" : {
+                        "type" : "object",
+                        "properties" : {
+                          "id" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "conversationId" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "role" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "content" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "modelName" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "createTime" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "feedback" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "feedbackAt" : {
+                            "type" : "string",
+                            "description" : ""
+                          }
+                        },
+                        "description" : "cn.lwccxy.trip.business.conversation.domain.vo.MessageVO"
+                      }
+                    },
+                    "pageNo" : {
+                      "type" : "integer",
+                      "description" : "当前页码",
+                      "format" : "int64"
+                    },
+                    "totalCount" : {
+                      "type" : "integer",
+                      "description" : "总数据量",
+                      "format" : "int64"
+                    },
+                    "pageSize" : {
+                      "type" : "integer",
+                      "description" : "每页展示的数据量",
+                      "format" : "int64"
+                    },
+                    "totalPage" : {
+                      "type" : "integer",
+                      "description" : "总页数",
+                      "format" : "int64"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "summary" : "send",
+        "description" : "send",
+        "parameters" : [ {
+          "name" : "conversationId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "content" ],
+                "type" : "object",
+                "properties" : {
+                  "content" : {
+                    "maxLength" : 20000,
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "timeout" : {
+                      "type" : "integer",
+                      "description" : "",
+                      "format" : "int64",
+                      "nullable" : true
+                    },
+                    "handler" : {
+                      "type" : "object",
+                      "properties" : { },
+                      "description" : "",
+                      "nullable" : true
+                    },
+                    "earlySendAttempts" : {
+                      "type" : "array",
+                      "description" : "",
+                      "items" : {
+                        "type" : "object",
+                        "properties" : {
+                          "data" : {
+                            "type" : "object",
+                            "properties" : { },
+                            "description" : ""
+                          },
+                          "mediaType" : {
+                            "type" : "object",
+                            "properties" : {
+                              "type" : {
+                                "type" : "string",
+                                "description" : ""
+                              },
+                              "subtype" : {
+                                "type" : "string",
+                                "description" : ""
+                              },
+                              "parameters" : {
+                                "type" : "object",
+                                "properties" : {
+                                  "key" : {
+                                    "type" : "string"
+                                  }
+                                },
+                                "description" : ""
+                              },
+                              "toStringValue" : {
+                                "type" : "string",
+                                "description" : "",
+                                "nullable" : true
+                              }
+                            },
+                            "description" : "",
+                            "nullable" : true
+                          }
+                        },
+                        "description" : "org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter.DataWithMediaType"
+                      }
+                    },
+                    "complete" : {
+                      "type" : "boolean",
+                      "description" : ""
+                    },
+                    "failure" : {
+                      "type" : "object",
+                      "properties" : {
+                        "detailMessage" : {
+                          "type" : "string",
+                          "description" : "Specific details about the Throwable.  For example, for\n{@code FileNotFoundException}, this contains the name of\nthe file that could not be found."
+                        },
+                        "cause" : {
+                          "type" : "object",
+                          "properties" : {
+                            "detailMessage" : {
+                              "type" : "string",
+                              "description" : "Specific details about the Throwable.  For example, for\n{@code FileNotFoundException}, this contains the name of\nthe file that could not be found."
+                            },
+                            "cause" : {
+                              "type" : "object",
+                              "properties" : { },
+                              "description" : "The throwable that caused this throwable to get thrown, or null if this\nthrowable was not caused by another throwable, or if the causative\nthrowable is unknown.  If this field is equal to this throwable itself,\nit indicates that the cause of this throwable has not yet been\ninitialized.",
+                              "default" : "this"
+                            },
+                            "stackTrace" : {
+                              "type" : "array",
+                              "description" : "The stack trace, as returned by{@link #getStackTrace()}.\n\nThe field is initialized to a zero-length array.  A{@code\n    * null} value of this field indicates subsequent calls to{@link\n    * #setStackTrace(StackTraceElement[])} and{@link\n    * #fillInStackTrace()} will be no-ops.",
+                              "items" : {
+                                "type" : "object",
+                                "properties" : {
+                                  "classLoaderName" : {
+                                    "type" : "string",
+                                    "description" : "The name of the class loader."
+                                  },
+                                  "moduleName" : {
+                                    "type" : "string",
+                                    "description" : "The module name."
+                                  },
+                                  "moduleVersion" : {
+                                    "type" : "string",
+                                    "description" : "The module version."
+                                  },
+                                  "declaringClass" : {
+                                    "type" : "string",
+                                    "description" : "The declaring class."
+                                  },
+                                  "methodName" : {
+                                    "type" : "string",
+                                    "description" : "The method name."
+                                  },
+                                  "fileName" : {
+                                    "type" : "string",
+                                    "description" : "The source file name."
+                                  },
+                                  "lineNumber" : {
+                                    "type" : "integer",
+                                    "description" : "The source line number."
+                                  },
+                                  "format" : {
+                                    "maximum" : 128,
+                                    "minimum" : -127,
+                                    "type" : "integer",
+                                    "description" : "Control to show full or partial module, package, and class names.",
+                                    "default" : "0"
+                                  }
+                                }
+                              },
+                              "default" : "new StackTraceElement[0]"
+                            },
+                            "suppressedExceptions" : {
+                              "type" : "array",
+                              "description" : "The list of suppressed exceptions, as returned by{@link\n    * #getSuppressed()}.  The list is initialized to a zero-element\nunmodifiable sentinel list.  When a serialized Throwable is\nread in, if the{@code suppressedExceptions} field points to a\nzero-element list, the field is reset to the sentinel value.",
+                              "items" : {
+                                "type" : "object",
+                                "properties" : { },
+                                "description" : "java.lang.Throwable"
+                              },
+                              "default" : "Collections.emptyList()"
+                            }
+                          },
+                          "description" : "The throwable that caused this throwable to get thrown, or null if this\nthrowable was not caused by another throwable, or if the causative\nthrowable is unknown.  If this field is equal to this throwable itself,\nit indicates that the cause of this throwable has not yet been\ninitialized.",
+                          "default" : "this"
+                        },
+                        "stackTrace" : {
+                          "type" : "array",
+                          "description" : "The stack trace, as returned by{@link #getStackTrace()}.\n\nThe field is initialized to a zero-length array.  A{@code\n    * null} value of this field indicates subsequent calls to{@link\n    * #setStackTrace(StackTraceElement[])} and{@link\n    * #fillInStackTrace()} will be no-ops.",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : {
+                              "classLoaderName" : {
+                                "type" : "string",
+                                "description" : "The name of the class loader."
+                              },
+                              "moduleName" : {
+                                "type" : "string",
+                                "description" : "The module name."
+                              },
+                              "moduleVersion" : {
+                                "type" : "string",
+                                "description" : "The module version."
+                              },
+                              "declaringClass" : {
+                                "type" : "string",
+                                "description" : "The declaring class."
+                              },
+                              "methodName" : {
+                                "type" : "string",
+                                "description" : "The method name."
+                              },
+                              "fileName" : {
+                                "type" : "string",
+                                "description" : "The source file name."
+                              },
+                              "lineNumber" : {
+                                "type" : "integer",
+                                "description" : "The source line number."
+                              },
+                              "format" : {
+                                "maximum" : 128,
+                                "minimum" : -127,
+                                "type" : "integer",
+                                "description" : "Control to show full or partial module, package, and class names.",
+                                "default" : "0"
+                              }
+                            }
+                          },
+                          "default" : "new StackTraceElement[0]"
+                        },
+                        "suppressedExceptions" : {
+                          "type" : "array",
+                          "description" : "The list of suppressed exceptions, as returned by{@link\n    * #getSuppressed()}.  The list is initialized to a zero-element\nunmodifiable sentinel list.  When a serialized Throwable is\nread in, if the{@code suppressedExceptions} field points to a\nzero-element list, the field is reset to the sentinel value.",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : {
+                              "detailMessage" : {
+                                "type" : "string",
+                                "description" : "Specific details about the Throwable.  For example, for\n{@code FileNotFoundException}, this contains the name of\nthe file that could not be found."
+                              },
+                              "cause" : {
+                                "type" : "object",
+                                "properties" : { },
+                                "description" : "The throwable that caused this throwable to get thrown, or null if this\nthrowable was not caused by another throwable, or if the causative\nthrowable is unknown.  If this field is equal to this throwable itself,\nit indicates that the cause of this throwable has not yet been\ninitialized.",
+                                "default" : "this"
+                              },
+                              "stackTrace" : {
+                                "type" : "array",
+                                "description" : "The stack trace, as returned by{@link #getStackTrace()}.\n\nThe field is initialized to a zero-length array.  A{@code\n    * null} value of this field indicates subsequent calls to{@link\n    * #setStackTrace(StackTraceElement[])} and{@link\n    * #fillInStackTrace()} will be no-ops.",
+                                "items" : {
+                                  "type" : "object",
+                                  "properties" : {
+                                    "classLoaderName" : {
+                                      "type" : "string",
+                                      "description" : "The name of the class loader."
+                                    },
+                                    "moduleName" : {
+                                      "type" : "string",
+                                      "description" : "The module name."
+                                    },
+                                    "moduleVersion" : {
+                                      "type" : "string",
+                                      "description" : "The module version."
+                                    },
+                                    "declaringClass" : {
+                                      "type" : "string",
+                                      "description" : "The declaring class."
+                                    },
+                                    "methodName" : {
+                                      "type" : "string",
+                                      "description" : "The method name."
+                                    },
+                                    "fileName" : {
+                                      "type" : "string",
+                                      "description" : "The source file name."
+                                    },
+                                    "lineNumber" : {
+                                      "type" : "integer",
+                                      "description" : "The source line number."
+                                    },
+                                    "format" : {
+                                      "maximum" : 128,
+                                      "minimum" : -127,
+                                      "type" : "integer",
+                                      "description" : "Control to show full or partial module, package, and class names.",
+                                      "default" : "0"
+                                    }
+                                  }
+                                },
+                                "default" : "new StackTraceElement[0]"
+                              },
+                              "suppressedExceptions" : {
+                                "type" : "array",
+                                "description" : "The list of suppressed exceptions, as returned by{@link\n    * #getSuppressed()}.  The list is initialized to a zero-element\nunmodifiable sentinel list.  When a serialized Throwable is\nread in, if the{@code suppressedExceptions} field points to a\nzero-element list, the field is reset to the sentinel value.",
+                                "items" : {
+                                  "type" : "object",
+                                  "properties" : { },
+                                  "description" : "java.lang.Throwable"
+                                },
+                                "default" : "Collections.emptyList()"
+                              }
+                            },
+                            "description" : "java.lang.Throwable"
+                          },
+                          "default" : "Collections.emptyList()"
+                        }
+                      },
+                      "description" : "",
+                      "nullable" : true
+                    },
+                    "timeoutCallback" : {
+                      "type" : "object",
+                      "properties" : {
+                        "delegates" : {
+                          "type" : "array",
+                          "description" : "",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : { },
+                            "description" : "java.lang.Runnable"
+                          }
+                        }
+                      },
+                      "description" : ""
+                    },
+                    "errorCallback" : {
+                      "type" : "object",
+                      "properties" : { },
+                      "description" : ""
+                    },
+                    "completionCallback" : {
+                      "type" : "object",
+                      "properties" : {
+                        "delegates" : {
+                          "type" : "array",
+                          "description" : "",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : { },
+                            "description" : "java.lang.Runnable"
+                          }
+                        }
+                      },
+                      "description" : ""
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/conversations/{conversationId}/messages/{messageId}/feedback" : {
+      "put" : {
+        "summary" : "feedback",
+        "description" : "feedback",
+        "parameters" : [ {
+          "name" : "conversationId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        }, {
+          "name" : "messageId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "feedback" : {
+                    "pattern" : "LIKE|DISLIKE",
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "conversationId" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "role" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "content" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "modelName" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "feedback" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "feedbackAt" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/prompt/query" : {
+      "post" : {
+        "summary" : "query",
+        "description" : "query",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "pageNo" : {
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "description" : "",
+                    "format" : "int64",
+                    "default" : 1
+                  },
+                  "pageSize" : {
+                    "maximum" : 200,
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "description" : "",
+                    "format" : "int64",
+                    "default" : 10
+                  },
+                  "keyword" : {
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "array",
+                      "description" : "响应数据",
+                      "items" : {
+                        "type" : "object",
+                        "properties" : {
+                          "id" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "promptKey" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "promptName" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "agentCapability" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "description" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "currentVersionId" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "status" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "createdBy" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "updatedBy" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "updateTime" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "createTime" : {
+                            "type" : "string",
+                            "description" : ""
+                          }
+                        },
+                        "description" : "cn.lwccxy.trip.system.prompt.domain.vo.PromptVO"
+                      }
+                    },
+                    "pageNo" : {
+                      "type" : "integer",
+                      "description" : "当前页码",
+                      "format" : "int64"
+                    },
+                    "totalCount" : {
+                      "type" : "integer",
+                      "description" : "总数据量",
+                      "format" : "int64"
+                    },
+                    "pageSize" : {
+                      "type" : "integer",
+                      "description" : "每页展示的数据量",
+                      "format" : "int64"
+                    },
+                    "totalPage" : {
+                      "type" : "integer",
+                      "description" : "总页数",
+                      "format" : "int64"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/prompt/{id}" : {
+      "get" : {
+        "summary" : "get",
+        "description" : "get",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "promptKey" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "promptName" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "agentCapability" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "description" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "currentVersionId" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "status" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createdBy" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updatedBy" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updateTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/prompt" : {
+      "post" : {
+        "summary" : "add",
+        "description" : "add",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "agentCapability", "promptKey", "promptName" ],
+                "type" : "object",
+                "properties" : {
+                  "promptKey" : {
+                    "maxLength" : 128,
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "promptName" : {
+                    "maxLength" : 255,
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "agentCapability" : {
+                    "maxLength" : 128,
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "description" : {
+                    "maxLength" : 1000,
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "promptKey" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "promptName" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "agentCapability" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "description" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "currentVersionId" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "status" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createdBy" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updatedBy" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updateTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/prompt/{promptId}/versions" : {
+      "get" : {
+        "summary" : "listVersions",
+        "description" : "listVersions",
+        "parameters" : [ {
+          "name" : "promptId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        }, {
+          "name" : "pageNo",
+          "in" : "query",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false,
+            "default" : "1"
+          }
+        }, {
+          "name" : "pageSize",
+          "in" : "query",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false,
+            "default" : "10"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "array",
+                      "description" : "响应数据",
+                      "items" : {
+                        "type" : "object",
+                        "properties" : {
+                          "id" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "promptId" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "versionNo" : {
+                            "type" : "integer",
+                            "description" : ""
+                          },
+                          "promptContent" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "contentHash" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "versionStatus" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "changeReason" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "createdBy" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "createdTime" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "publishedBy" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "publishedTime" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "current" : {
+                            "type" : "boolean",
+                            "description" : ""
+                          }
+                        },
+                        "description" : "cn.lwccxy.trip.system.prompt.domain.vo.PromptVersionVO"
+                      }
+                    },
+                    "pageNo" : {
+                      "type" : "integer",
+                      "description" : "当前页码",
+                      "format" : "int64"
+                    },
+                    "totalCount" : {
+                      "type" : "integer",
+                      "description" : "总数据量",
+                      "format" : "int64"
+                    },
+                    "pageSize" : {
+                      "type" : "integer",
+                      "description" : "每页展示的数据量",
+                      "format" : "int64"
+                    },
+                    "totalPage" : {
+                      "type" : "integer",
+                      "description" : "总页数",
+                      "format" : "int64"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "summary" : "addVersion",
+        "description" : "addVersion",
+        "parameters" : [ {
+          "name" : "promptId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "changeReason", "promptContent", "versionNo" ],
+                "type" : "object",
+                "properties" : {
+                  "versionNo" : {
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "description" : ""
+                  },
+                  "promptContent" : {
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "changeReason" : {
+                    "maxLength" : 1000,
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "promptId" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "versionNo" : {
+                          "type" : "integer",
+                          "description" : ""
+                        },
+                        "promptContent" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "contentHash" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "versionStatus" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "changeReason" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createdBy" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createdTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "publishedBy" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "publishedTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "current" : {
+                          "type" : "boolean",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/prompt/{promptId}/versions/{versionId}" : {
+      "get" : {
+        "summary" : "getVersion",
+        "description" : "getVersion",
+        "parameters" : [ {
+          "name" : "promptId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        }, {
+          "name" : "versionId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "promptId" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "versionNo" : {
+                          "type" : "integer",
+                          "description" : ""
+                        },
+                        "promptContent" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "contentHash" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "versionStatus" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "changeReason" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createdBy" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createdTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "publishedBy" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "publishedTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "current" : {
+                          "type" : "boolean",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/prompt/{promptId}/versions/compare" : {
+      "get" : {
+        "summary" : "compareVersions",
+        "description" : "compareVersions",
+        "parameters" : [ {
+          "name" : "promptId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        }, {
+          "name" : "leftVersionId",
+          "in" : "query",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        }, {
+          "name" : "rightVersionId",
+          "in" : "query",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "nullable" : false
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "promptId" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "leftVersionId" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "leftVersionNo" : {
+                          "type" : "integer",
+                          "description" : ""
+                        },
+                        "rightVersionId" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "rightVersionNo" : {
+                          "type" : "integer",
+                          "description" : ""
+                        },
+                        "contentChanged" : {
+                          "type" : "boolean",
+                          "description" : ""
+                        },
+                        "leftPromptContent" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "rightPromptContent" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/prompt/{promptId}/versions/{versionId}/publish" : {
+      "post" : {
+        "summary" : "publish",
+        "description" : "publish",
+        "parameters" : [ {
+          "name" : "promptId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        }, {
+          "name" : "versionId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "reason" ],
+                "type" : "object",
+                "properties" : {
+                  "reason" : {
+                    "maxLength" : 1000,
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "promptId" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "versionNo" : {
+                          "type" : "integer",
+                          "description" : ""
+                        },
+                        "promptContent" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "contentHash" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "versionStatus" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "changeReason" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createdBy" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createdTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "publishedBy" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "publishedTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "current" : {
+                          "type" : "boolean",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/prompt/{promptId}/offline" : {
+      "post" : {
+        "summary" : "offline",
+        "description" : "offline",
+        "parameters" : [ {
+          "name" : "promptId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "reason" ],
+                "type" : "object",
+                "properties" : {
+                  "reason" : {
+                    "maxLength" : 1000,
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "string",
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/prompt/{promptId}/rollback" : {
+      "post" : {
+        "summary" : "rollback",
+        "description" : "rollback",
+        "parameters" : [ {
+          "name" : "promptId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "reason", "versionId" ],
+                "type" : "object",
+                "properties" : {
+                  "versionId" : {
+                    "type" : "integer",
+                    "description" : "",
+                    "format" : "int64"
+                  },
+                  "reason" : {
+                    "maxLength" : 1000,
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "promptId" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "versionNo" : {
+                          "type" : "integer",
+                          "description" : ""
+                        },
+                        "promptContent" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "contentHash" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "versionStatus" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "changeReason" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createdBy" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createdTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "publishedBy" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "publishedTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "current" : {
+                          "type" : "boolean",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/prompt/{promptId}/release-logs" : {
+      "get" : {
+        "summary" : "listReleaseLogs",
+        "description" : "listReleaseLogs",
+        "parameters" : [ {
+          "name" : "promptId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "array",
+                      "description" : "响应数据",
+                      "items" : {
+                        "type" : "object",
+                        "properties" : {
+                          "id" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "promptId" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "operationType" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "targetVersionId" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "previousVersionId" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "operationReason" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "operatorId" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "operationResult" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "failureReason" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "createTime" : {
+                            "type" : "string",
+                            "description" : ""
+                          }
+                        },
+                        "description" : "cn.lwccxy.trip.system.prompt.domain.vo.PromptReleaseLogVO"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config/query" : {
+      "post" : {
+        "summary" : "query",
+        "description" : "query",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "pageNo" : {
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "description" : "",
+                    "format" : "int64",
+                    "default" : 1
+                  },
+                  "pageSize" : {
+                    "maximum" : 200,
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "description" : "",
+                    "format" : "int64",
+                    "default" : 10
+                  },
+                  "keyword" : {
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "array",
+                      "description" : "响应数据",
+                      "items" : {
+                        "type" : "object",
+                        "properties" : {
+                          "id" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "configKey" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "configValue" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "configName" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "remark" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "updateTime" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "createTime" : {
+                            "type" : "string",
+                            "description" : ""
+                          }
+                        },
+                        "description" : "cn.lwccxy.trip.system.config.domain.vo.ConfigVO"
+                      }
+                    },
+                    "pageNo" : {
+                      "type" : "integer",
+                      "description" : "当前页码",
+                      "format" : "int64"
+                    },
+                    "totalCount" : {
+                      "type" : "integer",
+                      "description" : "总数据量",
+                      "format" : "int64"
+                    },
+                    "pageSize" : {
+                      "type" : "integer",
+                      "description" : "每页展示的数据量",
+                      "format" : "int64"
+                    },
+                    "totalPage" : {
+                      "type" : "integer",
+                      "description" : "总页数",
+                      "format" : "int64"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config/{configKey}" : {
+      "get" : {
+        "summary" : "get",
+        "description" : "get",
+        "parameters" : [ {
+          "name" : "configKey",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "configKey" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "configValue" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "configName" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "remark" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updateTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config" : {
+      "post" : {
+        "summary" : "add",
+        "description" : "add",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "configKey", "configValue" ],
+                "type" : "object",
+                "properties" : {
+                  "configKey" : {
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "configName" : {
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "configValue" : {
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "remark" : {
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "configKey" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "configValue" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "configName" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "remark" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updateTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config/{id}" : {
+      "put" : {
+        "summary" : "update",
+        "description" : "update",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "configKey", "configValue" ],
+                "type" : "object",
+                "properties" : {
+                  "configKey" : {
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "configName" : {
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "configValue" : {
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "remark" : {
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "configKey" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "configValue" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "configName" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "remark" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updateTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "summary" : "delete",
+        "description" : "delete",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "string",
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config/value" : {
+      "put" : {
+        "summary" : "updateValue",
+        "description" : "updateValue",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "configKey", "configValue" ],
+                "type" : "object",
+                "properties" : {
+                  "configKey" : {
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "configValue" : {
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "configKey" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "configValue" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "configName" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "remark" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updateTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "createTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config/reload" : {
+      "post" : {
+        "summary" : "reload",
+        "description" : "reload",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "integer",
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/register" : {
+      "post" : {
+        "summary" : "register",
+        "description" : "register",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "username" ],
+                "type" : "object",
+                "properties" : {
+                  "username" : {
+                    "pattern" : "[a-z0-9_]{3,32}",
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "password" : {
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "username" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "role" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "mustChangePassword" : {
+                          "type" : "boolean",
+                          "description" : ""
+                        },
+                        "createTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updateTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login" : {
+      "post" : {
+        "summary" : "login",
+        "description" : "login",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "username" ],
+                "type" : "object",
+                "properties" : {
+                  "username" : {
+                    "pattern" : "[a-z0-9_]{3,32}",
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "password" : {
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "tokenName" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "tokenValue" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "expiresIn" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "user" : {
+                          "type" : "object",
+                          "properties" : {
+                            "id" : {
+                              "type" : "integer",
+                              "description" : "",
+                              "format" : "int64"
+                            },
+                            "username" : {
+                              "type" : "string",
+                              "description" : ""
+                            },
+                            "role" : {
+                              "type" : "string",
+                              "description" : ""
+                            },
+                            "mustChangePassword" : {
+                              "type" : "boolean",
+                              "description" : ""
+                            },
+                            "createTime" : {
+                              "type" : "string",
+                              "description" : ""
+                            },
+                            "updateTime" : {
+                              "type" : "string",
+                              "description" : ""
+                            }
+                          },
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout" : {
+      "post" : {
+        "summary" : "logout",
+        "description" : "logout",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "string",
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me" : {
+      "get" : {
+        "summary" : "me",
+        "description" : "me",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "object",
+                      "properties" : {
+                        "id" : {
+                          "type" : "integer",
+                          "description" : "",
+                          "format" : "int64"
+                        },
+                        "username" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "role" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "mustChangePassword" : {
+                          "type" : "boolean",
+                          "description" : ""
+                        },
+                        "createTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        },
+                        "updateTime" : {
+                          "type" : "string",
+                          "description" : ""
+                        }
+                      },
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/password" : {
+      "put" : {
+        "summary" : "password",
+        "description" : "password",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "oldPassword" : {
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "newPassword" : {
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "string",
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/user/query" : {
+      "post" : {
+        "summary" : "query",
+        "description" : "query",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "pageNo" : {
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "description" : "",
+                    "format" : "int64",
+                    "default" : 1
+                  },
+                  "pageSize" : {
+                    "maximum" : 200,
+                    "minimum" : 1,
+                    "type" : "integer",
+                    "description" : "",
+                    "format" : "int64",
+                    "default" : 10
+                  },
+                  "keyword" : {
+                    "maxLength" : 32,
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "role" : {
+                    "pattern" : "USER|ADMIN",
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "array",
+                      "description" : "响应数据",
+                      "items" : {
+                        "type" : "object",
+                        "properties" : {
+                          "id" : {
+                            "type" : "integer",
+                            "description" : "",
+                            "format" : "int64"
+                          },
+                          "username" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "role" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "mustChangePassword" : {
+                            "type" : "boolean",
+                            "description" : ""
+                          },
+                          "createTime" : {
+                            "type" : "string",
+                            "description" : ""
+                          },
+                          "updateTime" : {
+                            "type" : "string",
+                            "description" : ""
+                          }
+                        },
+                        "description" : "cn.lwccxy.trip.system.user.domain.vo.UserVO"
+                      }
+                    },
+                    "pageNo" : {
+                      "type" : "integer",
+                      "description" : "当前页码",
+                      "format" : "int64"
+                    },
+                    "totalCount" : {
+                      "type" : "integer",
+                      "description" : "总数据量",
+                      "format" : "int64"
+                    },
+                    "pageSize" : {
+                      "type" : "integer",
+                      "description" : "每页展示的数据量",
+                      "format" : "int64"
+                    },
+                    "totalPage" : {
+                      "type" : "integer",
+                      "description" : "总页数",
+                      "format" : "int64"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/user/{id}/reset-password" : {
+      "post" : {
+        "summary" : "reset",
+        "description" : "reset",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "schema" : {
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "required" : [ "reason" ],
+                "type" : "object",
+                "properties" : {
+                  "temporaryPassword" : {
+                    "type" : "string",
+                    "description" : ""
+                  },
+                  "reason" : {
+                    "maxLength" : 1000,
+                    "type" : "string",
+                    "description" : ""
+                  }
+                },
+                "description" : ""
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "success" : {
+                      "type" : "boolean",
+                      "description" : "是否成功，默认为 true",
+                      "default" : "true"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "description" : "响应消息"
+                    },
+                    "errorCode" : {
+                      "type" : "string",
+                      "description" : "异常码"
+                    },
+                    "data" : {
+                      "type" : "string",
+                      "description" : "响应数据"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter.Handler" : {
+        "type" : "object",
+        "properties" : { },
+        "description" : "",
+        "nullable" : true
+      },
+      "java.lang.Object" : {
+        "type" : "object",
+        "properties" : { },
+        "description" : ""
+      },
+      "org.springframework.http.MediaType" : {
+        "type" : "object",
+        "properties" : {
+          "type" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "subtype" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "parameters" : {
+            "type" : "object",
+            "properties" : {
+              "key" : {
+                "type" : "string"
+              }
+            },
+            "description" : ""
+          },
+          "toStringValue" : {
+            "type" : "string",
+            "description" : "",
+            "nullable" : true
+          }
+        },
+        "description" : "",
+        "nullable" : true
+      },
+      "org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter.DataWithMediaType" : {
+        "type" : "object",
+        "properties" : {
+          "data" : {
+            "type" : "object",
+            "properties" : { },
+            "description" : ""
+          },
+          "mediaType" : {
+            "type" : "object",
+            "properties" : {
+              "type" : {
+                "type" : "string",
+                "description" : ""
+              },
+              "subtype" : {
+                "type" : "string",
+                "description" : ""
+              },
+              "parameters" : {
+                "type" : "object",
+                "properties" : {
+                  "key" : {
+                    "type" : "string"
+                  }
+                },
+                "description" : ""
+              },
+              "toStringValue" : {
+                "type" : "string",
+                "description" : "",
+                "nullable" : true
+              }
+            },
+            "description" : "",
+            "nullable" : true
+          }
+        },
+        "description" : "org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter.DataWithMediaType"
+      },
+      "java.lang.Throwable" : {
+        "type" : "object",
+        "properties" : {
+          "detailMessage" : {
+            "type" : "string",
+            "description" : "Specific details about the Throwable.  For example, for\n{@code FileNotFoundException}, this contains the name of\nthe file that could not be found."
+          },
+          "cause" : {
+            "type" : "object",
+            "properties" : {
+              "detailMessage" : {
+                "type" : "string",
+                "description" : "Specific details about the Throwable.  For example, for\n{@code FileNotFoundException}, this contains the name of\nthe file that could not be found."
+              },
+              "cause" : {
+                "type" : "object",
+                "properties" : { },
+                "description" : "The throwable that caused this throwable to get thrown, or null if this\nthrowable was not caused by another throwable, or if the causative\nthrowable is unknown.  If this field is equal to this throwable itself,\nit indicates that the cause of this throwable has not yet been\ninitialized.",
+                "default" : "this"
+              },
+              "stackTrace" : {
+                "type" : "array",
+                "description" : "The stack trace, as returned by{@link #getStackTrace()}.\n\nThe field is initialized to a zero-length array.  A{@code\n    * null} value of this field indicates subsequent calls to{@link\n    * #setStackTrace(StackTraceElement[])} and{@link\n    * #fillInStackTrace()} will be no-ops.",
+                "items" : {
+                  "type" : "object",
+                  "properties" : {
+                    "classLoaderName" : {
+                      "type" : "string",
+                      "description" : "The name of the class loader."
+                    },
+                    "moduleName" : {
+                      "type" : "string",
+                      "description" : "The module name."
+                    },
+                    "moduleVersion" : {
+                      "type" : "string",
+                      "description" : "The module version."
+                    },
+                    "declaringClass" : {
+                      "type" : "string",
+                      "description" : "The declaring class."
+                    },
+                    "methodName" : {
+                      "type" : "string",
+                      "description" : "The method name."
+                    },
+                    "fileName" : {
+                      "type" : "string",
+                      "description" : "The source file name."
+                    },
+                    "lineNumber" : {
+                      "type" : "integer",
+                      "description" : "The source line number."
+                    },
+                    "format" : {
+                      "maximum" : 128,
+                      "minimum" : -127,
+                      "type" : "integer",
+                      "description" : "Control to show full or partial module, package, and class names.",
+                      "default" : "0"
+                    }
+                  }
+                },
+                "default" : "new StackTraceElement[0]"
+              },
+              "suppressedExceptions" : {
+                "type" : "array",
+                "description" : "The list of suppressed exceptions, as returned by{@link\n    * #getSuppressed()}.  The list is initialized to a zero-element\nunmodifiable sentinel list.  When a serialized Throwable is\nread in, if the{@code suppressedExceptions} field points to a\nzero-element list, the field is reset to the sentinel value.",
+                "items" : {
+                  "type" : "object",
+                  "properties" : { },
+                  "description" : "java.lang.Throwable"
+                },
+                "default" : "Collections.emptyList()"
+              }
+            },
+            "description" : "The throwable that caused this throwable to get thrown, or null if this\nthrowable was not caused by another throwable, or if the causative\nthrowable is unknown.  If this field is equal to this throwable itself,\nit indicates that the cause of this throwable has not yet been\ninitialized.",
+            "default" : "this"
+          },
+          "stackTrace" : {
+            "type" : "array",
+            "description" : "The stack trace, as returned by{@link #getStackTrace()}.\n\nThe field is initialized to a zero-length array.  A{@code\n    * null} value of this field indicates subsequent calls to{@link\n    * #setStackTrace(StackTraceElement[])} and{@link\n    * #fillInStackTrace()} will be no-ops.",
+            "items" : {
+              "type" : "object",
+              "properties" : {
+                "classLoaderName" : {
+                  "type" : "string",
+                  "description" : "The name of the class loader."
+                },
+                "moduleName" : {
+                  "type" : "string",
+                  "description" : "The module name."
+                },
+                "moduleVersion" : {
+                  "type" : "string",
+                  "description" : "The module version."
+                },
+                "declaringClass" : {
+                  "type" : "string",
+                  "description" : "The declaring class."
+                },
+                "methodName" : {
+                  "type" : "string",
+                  "description" : "The method name."
+                },
+                "fileName" : {
+                  "type" : "string",
+                  "description" : "The source file name."
+                },
+                "lineNumber" : {
+                  "type" : "integer",
+                  "description" : "The source line number."
+                },
+                "format" : {
+                  "maximum" : 128,
+                  "minimum" : -127,
+                  "type" : "integer",
+                  "description" : "Control to show full or partial module, package, and class names.",
+                  "default" : "0"
+                }
+              }
+            },
+            "default" : "new StackTraceElement[0]"
+          },
+          "suppressedExceptions" : {
+            "type" : "array",
+            "description" : "The list of suppressed exceptions, as returned by{@link\n    * #getSuppressed()}.  The list is initialized to a zero-element\nunmodifiable sentinel list.  When a serialized Throwable is\nread in, if the{@code suppressedExceptions} field points to a\nzero-element list, the field is reset to the sentinel value.",
+            "items" : {
+              "type" : "object",
+              "properties" : {
+                "detailMessage" : {
+                  "type" : "string",
+                  "description" : "Specific details about the Throwable.  For example, for\n{@code FileNotFoundException}, this contains the name of\nthe file that could not be found."
+                },
+                "cause" : {
+                  "type" : "object",
+                  "properties" : { },
+                  "description" : "The throwable that caused this throwable to get thrown, or null if this\nthrowable was not caused by another throwable, or if the causative\nthrowable is unknown.  If this field is equal to this throwable itself,\nit indicates that the cause of this throwable has not yet been\ninitialized.",
+                  "default" : "this"
+                },
+                "stackTrace" : {
+                  "type" : "array",
+                  "description" : "The stack trace, as returned by{@link #getStackTrace()}.\n\nThe field is initialized to a zero-length array.  A{@code\n    * null} value of this field indicates subsequent calls to{@link\n    * #setStackTrace(StackTraceElement[])} and{@link\n    * #fillInStackTrace()} will be no-ops.",
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "classLoaderName" : {
+                        "type" : "string",
+                        "description" : "The name of the class loader."
+                      },
+                      "moduleName" : {
+                        "type" : "string",
+                        "description" : "The module name."
+                      },
+                      "moduleVersion" : {
+                        "type" : "string",
+                        "description" : "The module version."
+                      },
+                      "declaringClass" : {
+                        "type" : "string",
+                        "description" : "The declaring class."
+                      },
+                      "methodName" : {
+                        "type" : "string",
+                        "description" : "The method name."
+                      },
+                      "fileName" : {
+                        "type" : "string",
+                        "description" : "The source file name."
+                      },
+                      "lineNumber" : {
+                        "type" : "integer",
+                        "description" : "The source line number."
+                      },
+                      "format" : {
+                        "maximum" : 128,
+                        "minimum" : -127,
+                        "type" : "integer",
+                        "description" : "Control to show full or partial module, package, and class names.",
+                        "default" : "0"
+                      }
+                    }
+                  },
+                  "default" : "new StackTraceElement[0]"
+                },
+                "suppressedExceptions" : {
+                  "type" : "array",
+                  "description" : "The list of suppressed exceptions, as returned by{@link\n    * #getSuppressed()}.  The list is initialized to a zero-element\nunmodifiable sentinel list.  When a serialized Throwable is\nread in, if the{@code suppressedExceptions} field points to a\nzero-element list, the field is reset to the sentinel value.",
+                  "items" : {
+                    "type" : "object",
+                    "properties" : { },
+                    "description" : "java.lang.Throwable"
+                  },
+                  "default" : "Collections.emptyList()"
+                }
+              },
+              "description" : "java.lang.Throwable"
+            },
+            "default" : "Collections.emptyList()"
+          }
+        },
+        "description" : "",
+        "nullable" : true
+      },
+      "java.lang.Runnable" : {
+        "type" : "object",
+        "properties" : { },
+        "description" : "java.lang.Runnable"
+      },
+      "org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter.DefaultCallback" : {
+        "type" : "object",
+        "properties" : {
+          "delegates" : {
+            "type" : "array",
+            "description" : "",
+            "items" : {
+              "type" : "object",
+              "properties" : { },
+              "description" : "java.lang.Runnable"
+            }
+          }
+        },
+        "description" : ""
+      },
+      "org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter.ErrorCallback" : {
+        "type" : "object",
+        "properties" : { },
+        "description" : ""
+      },
+      "cn.lwccxy.trip.business.conversation.domain.vo.ConversationVO" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "title" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "status" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "messageCount" : {
+            "type" : "integer",
+            "description" : ""
+          },
+          "createTime" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "updateTime" : {
+            "type" : "string",
+            "description" : ""
+          }
+        },
+        "description" : "响应数据"
+      },
+      "cn.lwccxy.trip.business.conversation.domain.vo.MessageVO" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "conversationId" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "role" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "content" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "modelName" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "createTime" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "feedback" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "feedbackAt" : {
+            "type" : "string",
+            "description" : ""
+          }
+        },
+        "description" : "响应数据"
+      },
+      "cn.lwccxy.trip.system.prompt.domain.vo.PromptVO" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "promptKey" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "promptName" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "agentCapability" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "description" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "currentVersionId" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "status" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "createdBy" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "updatedBy" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "updateTime" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "createTime" : {
+            "type" : "string",
+            "description" : ""
+          }
+        },
+        "description" : "响应数据"
+      },
+      "cn.lwccxy.trip.system.prompt.domain.vo.PromptVersionVO" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "promptId" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "versionNo" : {
+            "type" : "integer",
+            "description" : ""
+          },
+          "promptContent" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "contentHash" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "versionStatus" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "changeReason" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "createdBy" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "createdTime" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "publishedBy" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "publishedTime" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "current" : {
+            "type" : "boolean",
+            "description" : ""
+          }
+        },
+        "description" : "响应数据"
+      },
+      "cn.lwccxy.trip.system.prompt.domain.vo.PromptVersionCompareVO" : {
+        "type" : "object",
+        "properties" : {
+          "promptId" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "leftVersionId" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "leftVersionNo" : {
+            "type" : "integer",
+            "description" : ""
+          },
+          "rightVersionId" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "rightVersionNo" : {
+            "type" : "integer",
+            "description" : ""
+          },
+          "contentChanged" : {
+            "type" : "boolean",
+            "description" : ""
+          },
+          "leftPromptContent" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "rightPromptContent" : {
+            "type" : "string",
+            "description" : ""
+          }
+        },
+        "description" : "响应数据"
+      },
+      "cn.lwccxy.trip.system.prompt.domain.vo.PromptReleaseLogVO" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "promptId" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "operationType" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "targetVersionId" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "previousVersionId" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "operationReason" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "operatorId" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "operationResult" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "failureReason" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "createTime" : {
+            "type" : "string",
+            "description" : ""
+          }
+        },
+        "description" : "cn.lwccxy.trip.system.prompt.domain.vo.PromptReleaseLogVO"
+      },
+      "cn.lwccxy.trip.system.config.domain.vo.ConfigVO" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "configKey" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "configValue" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "configName" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "remark" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "updateTime" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "createTime" : {
+            "type" : "string",
+            "description" : ""
+          }
+        },
+        "description" : "响应数据"
+      },
+      "cn.lwccxy.trip.system.user.domain.vo.UserVO" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "username" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "role" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "mustChangePassword" : {
+            "type" : "boolean",
+            "description" : ""
+          },
+          "createTime" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "updateTime" : {
+            "type" : "string",
+            "description" : ""
+          }
+        },
+        "description" : "cn.lwccxy.trip.system.user.domain.vo.UserVO"
+      },
+      "cn.lwccxy.trip.system.user.domain.vo.LoginVO" : {
+        "type" : "object",
+        "properties" : {
+          "tokenName" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "tokenValue" : {
+            "type" : "string",
+            "description" : ""
+          },
+          "expiresIn" : {
+            "type" : "integer",
+            "description" : "",
+            "format" : "int64"
+          },
+          "user" : {
+            "type" : "object",
+            "properties" : {
+              "id" : {
+                "type" : "integer",
+                "description" : "",
+                "format" : "int64"
+              },
+              "username" : {
+                "type" : "string",
+                "description" : ""
+              },
+              "role" : {
+                "type" : "string",
+                "description" : ""
+              },
+              "mustChangePassword" : {
+                "type" : "boolean",
+                "description" : ""
+              },
+              "createTime" : {
+                "type" : "string",
+                "description" : ""
+              },
+              "updateTime" : {
+                "type" : "string",
+                "description" : ""
+              }
+            },
+            "description" : ""
+          }
+        },
+        "description" : "响应数据"
+      }
+    }
+  }
+}

@@ -1,6 +1,8 @@
 package cn.lwccxy.trip.business.preference.service;
 
+import cn.lwccxy.trip.agent.enums.ModelPricingEnum;
 import cn.lwccxy.trip.agent.memory.CropTripLongTermMemory;
+import cn.lwccxy.trip.agent.utils.ModelTokenBillingUtil;
 import cn.lwccxy.trip.business.preference.domain.form.PreferenceSaveForm;
 import cn.lwccxy.trip.business.preference.domain.vo.PreferenceCategoryVO;
 import cn.lwccxy.trip.business.preference.domain.vo.PreferenceOptionVO;
@@ -19,6 +21,7 @@ import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.model.ChatResponse;
+import io.agentscope.core.model.ChatUsage;
 import io.agentscope.core.model.Model;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,16 +31,18 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
 /** 管理当前用户的长期记忆差旅偏好。 */
 @Service
 public class PreferenceService {
 
     private static final Logger logger = LoggerFactory.getLogger(PreferenceService.class);
-    private static final String MEMORY_CACHE_PREFIX = "crop:trip:preference:";
 
     private final CurrentUser currentUser;
     private final RedisCacheUtil redisCache;
@@ -50,7 +55,7 @@ public class PreferenceService {
      * 创建偏好服务并注入轻量模型和百炼长期记忆配置。
      *
      * @param currentUser 当前登录用户上下文
-     * @param redisCache Redis 缓存工具
+     * @param redisCache Redis 缓存工具，仅传给长期记忆适配器用于读写偏好缓存
      * @param preferenceModel 用于把记忆摘要结构化的轻量模型
      * @param dashscopeApiKey 百炼 API Key，配置项 corp.trip.bailian.dashscope-api
      * @param memoryLibraryId 百炼长期记忆库标识，配置项 corp.trip.bailian.memory-library-id
@@ -80,7 +85,7 @@ public class PreferenceService {
         UserPreferenceVO result = new UserPreferenceVO();
         result.setUserId(userId);
         result.setMemorySummary(summary);
-        result.setPreferences(summary.isBlank() ? Map.of() : parseMemory(summary));
+        result.setPreferences(summary.isBlank() ? Map.of() : parseMemory(userId, summary));
         return result;
     }
 
@@ -97,7 +102,7 @@ public class PreferenceService {
         Msg userMessage = buildMessage(MsgRole.USER, "请记住并在后续规划时优先使用这些差旅偏好：" + naturalLanguage);
         Msg assistantMessage = buildMessage(MsgRole.ASSISTANT, "已保存用户的差旅偏好：" + naturalLanguage);
 
-        // 只有远端记录成功后才清理缓存，避免失败时丢弃仍有效的旧缓存。
+        // 远端写入失败时直接返回失败，缓存由 CropTripLongTermMemory 在写入成功后统一失效。
         try {
             memory.record(List.of(userMessage, assistantMessage)).block();
         } catch (RuntimeException exception) {
@@ -105,13 +110,6 @@ public class PreferenceService {
             logger.warn("[PreferenceService] 保存当前用户长期记忆失败，userId={}, exception={}",
                     userId, exception.getClass().getSimpleName());
             return Response.fail("PREFERENCE_SAVE_FAILED", "长期记忆服务暂时不可用，偏好未保存");
-        }
-        try {
-            redisCache.delete(MEMORY_CACHE_PREFIX + userId);
-        } catch (RuntimeException exception) {
-            // Mem0 已确认写入成功，缓存故障只记录状态，不把已保存的偏好误报为未保存。
-            logger.warn("[PreferenceService] 长期记忆已保存但缓存清理失败，userId={}, exception={}",
-                    userId, exception.getClass().getSimpleName());
         }
         logger.info("[PreferenceService] 当前用户差旅偏好已写入长期记忆，userId={}, fields={}",
                 userId, normalized.size());
@@ -153,15 +151,24 @@ public class PreferenceService {
         }
     }
 
-    /** 将自然语言记忆摘要解析为允许展示的结构化偏好。 */
-    private Map<String, Object> parseMemory(String summary) {
+    /**
+     * 将自然语言记忆摘要解析为允许展示的结构化偏好。
+     *
+     * @param userId 当前用户 ID，用于模型调用审计日志
+     * @param summary 长期记忆召回的自然语言摘要
+     * @return 已按合法选项归一化的结构化偏好；解析失败时返回空 Map
+     */
+    private Map<String, Object> parseMemory(String userId, String summary) {
+        // 记录模型调用起点，用于审计包含模型等待在内的端到端耗时。
+        long startNanos = System.nanoTime();
+        List<ChatResponse> responses = null;
         try {
             String prompt = buildParsePrompt();
             List<Msg> messages = List.of(
                     buildMessage(MsgRole.SYSTEM, prompt), // 系统提示词
                     buildMessage(MsgRole.USER, summary)); // 检索回来的摘要列表
             // 调用LLM去做解析, 输出结构化json
-            List<ChatResponse> responses = preferenceModel.stream(messages, null, null).collectList().block();
+            responses = preferenceModel.stream(messages, null, null).collectList().block();
             String jsonText = extractText(responses).strip();
             if (jsonText.startsWith("```")) {
                 jsonText = jsonText.replaceFirst("```(?:json)?\\s*", "").replaceFirst("\\s*```$", "");
@@ -174,7 +181,63 @@ public class PreferenceService {
             logger.warn("[PreferenceService] 长期记忆偏好结构化解析失败，exception={}",
                     exception.getClass().getSimpleName());
             return Map.of();
+        } finally {
+            // 成功、解析失败和模型异常三种情况都记录一次用量，保证审计数据不遗漏。
+            logModelUsage(userId, responses, startNanos);
         }
+    }
+
+    /**
+     * 记录偏好结构化解析的模型调用审计信息，包括 Token 用量、估算费用和耗时。
+     *
+     * <p>优先使用模型服务端返回的 ChatUsage；流式响应可能只给出最后一次分片的用量，
+     * 因此这里取最后一个非空用量，避免重复累计。未维护单价的模型只记录未知费用，
+     * 不套用其他模型价格，防止费用统计失真。</p>
+     *
+     * @param userId 当前用户 ID，便于按用户排查费用归属
+     * @param responses 模型响应列表；调用失败时为 null
+     * @param startNanos 调用开始时间，来自 System.nanoTime()
+     */
+    private void logModelUsage(String userId, List<ChatResponse> responses, long startNanos) {
+        long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000;
+        // 模型名用于匹配价格枚举，未知模型不参与费用估算。
+        String modelName = preferenceModel.getModelName();
+        ChatUsage usage = responses == null ? null : responses.stream()
+                .filter(Objects::nonNull)
+                .map(ChatResponse::getUsage)
+                .filter(Objects::nonNull)
+                .reduce((first, next) -> next)
+                .orElse(null);
+        if (usage == null) {
+            // 模型未返回用量时仍输出耗时和模型名，便于定位是网关未透传还是调用失败。
+            logger.info("[偏好解析模型审计] userId={}, 模型={}, 输入Token=未知, 输出Token=未知, 总Token=未知, 模型耗时=未知, 估算费用=未知, 总耗时={}ms",
+                    userId, modelName, elapsedMs);
+            return;
+        }
+        // 单价只在枚举中按模型名精确匹配，未配置的模型费用记未知。
+        Optional<ModelPricingEnum> pricing = findPricing(modelName);
+        String costText = pricing
+                .map(model -> ModelTokenBillingUtil.calculateCost(
+                        usage.getInputTokens(), usage.getOutputTokens(), model) + "元")
+                .orElse("未知（枚举中未配置该模型单价）");
+        logger.info("[偏好解析模型审计] userId={}, 模型={}, 输入Token={}, 输出Token={}, 总Token={}, 模型耗时={}s, 估算费用={}, 总耗时={}ms",
+                userId, modelName, usage.getInputTokens(), usage.getOutputTokens(), usage.getTotalTokens(),
+                usage.getTime(), costText, elapsedMs);
+    }
+
+    /**
+     * 按模型服务端名称查找枚举中已维护的单价。
+     *
+     * @param modelName 模型服务端名称
+     * @return 匹配的单价枚举；模型名为空或未配置时返回空
+     */
+    private Optional<ModelPricingEnum> findPricing(String modelName) {
+        if (modelName == null || modelName.isBlank()) {
+            return Optional.empty();
+        }
+        return Arrays.stream(ModelPricingEnum.values())
+                .filter(pricing -> pricing.getModelName().equals(modelName))
+                .findFirst();
     }
 
     /** 生成只允许从已定义字段和选项中选择的结构化抽取提示词。 */

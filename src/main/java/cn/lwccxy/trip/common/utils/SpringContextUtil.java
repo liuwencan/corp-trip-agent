@@ -1,4 +1,4 @@
-package cn.lwccxy.trip.common.util;
+package cn.lwccxy.trip.common.utils;
 
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.context.ApplicationContext;

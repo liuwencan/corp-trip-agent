@@ -22,6 +22,20 @@ CREATE TABLE `t_user` (
     UNIQUE KEY `uk_user_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='用户账户';
 
+CREATE TABLE `user_profile` (
+  `user_id` varchar(64) NOT NULL COMMENT '用户ID',
+  `base_city` varchar(128) DEFAULT NULL COMMENT '常驻城市',
+  `level` varchar(16) DEFAULT NULL COMMENT '职级，如 P5/P6/P7/P8',
+  `name_pinyin` varchar(128) DEFAULT NULL COMMENT '姓名拼音（大写，姓在前名在后，空格分隔），如 ZHANG SAN，用于酒店预订',
+  `email` varchar(128) DEFAULT NULL COMMENT '用户邮箱，用于酒店预订下单联系人',
+  `chinese_name` varchar(64) DEFAULT NULL COMMENT '中文姓名，如 张三，用于机票预订乘客信息',
+  `id_type` int DEFAULT NULL COMMENT '证件类型（0-身份证 1-护照 2-其他 3-回乡证 4-军官证 5-警官证 6-港澳通行证 7-台胞证 8-台湾通行证 9-外国人永久居留身份证）',
+  `id_number` varchar(64) DEFAULT NULL COMMENT '证件号码（身份证/护照等），用于机票预订',
+  `phone` varchar(32) DEFAULT NULL COMMENT '手机号，用于机票预订联系人',
+  `gender` varchar(4) DEFAULT NULL COMMENT '性别：M-男，F-女',
+  PRIMARY KEY (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户档案';
+
 CREATE TABLE `user_provider_api_key` (
     `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
     `user_id` bigint NOT NULL COMMENT '用户ID',
@@ -188,6 +202,77 @@ CREATE TABLE `trip_approval_record` (
     KEY `idx_trip_approval_status_time` (`status`, `submit_time`),
     KEY `idx_trip_approval_user_time` (`user_id`, `submit_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='出差申请审批记录';
+
+CREATE TABLE `trip_booking_record` (
+    `id` varchar(64) NOT NULL COMMENT '预订记录ID',
+    `user_id` varchar(64) NOT NULL COMMENT '当前用户ID',
+    `trip_order_id` varchar(64) NOT NULL COMMENT '关联已审批出差申请单ID',
+    `biz_type` varchar(16) NOT NULL COMMENT '产品类型：FLIGHT、HOTEL、TRAIN',
+    `product_key` varchar(256) NOT NULL COMMENT '途牛搜索结果中的产品标识',
+    `idempotency_key` char(64) NOT NULL COMMENT '预订幂等键',
+    `provider_code` varchar(32) NOT NULL COMMENT '供应商代码',
+    `provider_order_id` varchar(128) DEFAULT NULL COMMENT '供应商订单ID',
+    `product_summary` varchar(2000) NOT NULL COMMENT '不含敏感个人信息的产品摘要',
+    `status` varchar(16) NOT NULL COMMENT '状态：PREPARING、CREATED、FAILED、UNKNOWN、CANCELLED',
+    `provider_status` varchar(64) DEFAULT NULL COMMENT '供应商返回的非敏感状态',
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_trip_booking_user_idempotency` (`user_id`, `idempotency_key`),
+    UNIQUE KEY `uk_trip_booking_provider_order` (`provider_code`, `provider_order_id`),
+    KEY `idx_trip_booking_order_type` (`user_id`, `trip_order_id`, `biz_type`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC COMMENT='差旅供应商预订记录';
+
+CREATE TABLE `booking_record` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增主键',
+    `booking_id` varchar(64) NOT NULL COMMENT '内部预订单号（系统生成，全局唯一）',
+    `user_id` varchar(64) NOT NULL COMMENT '用户ID',
+    `conversation_id` varchar(64) DEFAULT NULL COMMENT '关联会话ID（chat_conversation.conversation_id）',
+    `travel_order_id` varchar(64) DEFAULT NULL COMMENT '关联差旅单ID（travel_order.order_id，可为空）',
+    `biz_type` varchar(16) NOT NULL COMMENT '预订业务类型: FLIGHT/HOTEL/TRAIN/TICKET/CRUISE/VACATION',
+    `platform` varchar(32) NOT NULL COMMENT '预订平台: tuniu / rolling-go-hotel / flight-manager 等',
+    `external_order_no` varchar(128) DEFAULT NULL COMMENT '外部平台主订单号',
+    `status` varchar(32) NOT NULL DEFAULT 'CREATED' COMMENT '统一预订状态: CREATED/PENDING_PAYMENT/PAID/CONFIRMED/COMPLETED/CANCELLED/REFUNDED/FAILED',
+    `external_status` varchar(64) DEFAULT NULL COMMENT '外部平台原始状态码/文案（保留平台原值）',
+    `payment_status` varchar(32) DEFAULT NULL COMMENT '支付状态: UNPAID/PAID/REFUNDED',
+    `title` varchar(256) DEFAULT NULL COMMENT '预订标题',
+    `total_amount` decimal(12,2) DEFAULT NULL COMMENT '订单总金额（元）',
+    `currency` varchar(8) DEFAULT 'CNY' COMMENT '币种',
+    `contact_name` varchar(64) DEFAULT NULL COMMENT '联系人姓名',
+    `contact_phone` varchar(32) DEFAULT NULL COMMENT '联系人手机号',
+    `start_time` datetime DEFAULT NULL COMMENT '服务开始时间（出发/入住时间）',
+    `end_time` datetime DEFAULT NULL COMMENT '服务结束时间（到达/离店时间）',
+    `detail` json DEFAULT NULL COMMENT '平台原始/明细信息JSON（航班号、房型、乘客、行程等）',
+    `remark` varchar(512) DEFAULT NULL COMMENT '备注',
+    `booked_at` datetime DEFAULT NULL COMMENT '下单时间',
+    `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标志',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_booking_id` (`booking_id`),
+    UNIQUE KEY `uk_platform_order` (`platform`,`biz_type`,`external_order_no`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_user_biz` (`user_id`,`biz_type`),
+    KEY `idx_travel_order_id` (`travel_order_id`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Agent预订记录（机票/酒店/火车票等，兼容多平台）';
+
+CREATE TABLE `travel_policy_rule` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增主键',
+    `level_min` int NOT NULL COMMENT '职级区间下限（数字）',
+    `level_max` int NOT NULL COMMENT '职级区间上限（99表示无上限）',
+    `city_tier` varchar(16) NOT NULL COMMENT '城市等级：一线/新一线/其他',
+    `flight_class` varchar(32) DEFAULT NULL COMMENT '允许的最高机票舱位',
+    `train_seat_class` varchar(16) DEFAULT NULL COMMENT '允许的最高高铁座位',
+    `hotel_limit` double NOT NULL DEFAULT '0' COMMENT '酒店每晚上限（元）',
+    `hotel_star_limit` int NOT NULL DEFAULT '4' COMMENT '酒店星级上限',
+    `daily_meal_limit` double NOT NULL DEFAULT '0' COMMENT '餐补每日上限（元）',
+    `daily_transport_limit` double NOT NULL DEFAULT '0' COMMENT '交通补贴每日上限（元）',
+    `approval_threshold` double NOT NULL DEFAULT '0' COMMENT '审批金额阈值（超过此金额需审批）',
+    `advance_booking_days` int NOT NULL DEFAULT '3' COMMENT '提前预订最少天数',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_level_city` (`level_min`,`level_max`,`city_tier`)
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='差旅政策规则表';
 
 INSERT INTO `t_intent_utterance` (`intent_code`, `utterance_text`, `status`, `remark`) VALUES
 ('TRAVEL_POLICY_QUERY', '公司出差住酒店能报销多少钱', 'ACTIVE', '住宿标准咨询'),

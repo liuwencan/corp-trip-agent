@@ -143,6 +143,26 @@ public class CityTransitTimeService {
         return estimateByCityTier(from, to);
     }
 
+    /**
+     * 将目的地映射为差旅政策表使用的城市等级。
+     *
+     * @param city 目的地城市
+     * @return 一线、新一线或其他
+     */
+    public String resolvePolicyCityTier(String city) {
+        String normalizedCity = normalizeCity(city);
+        if (normalizedCity.isEmpty()) {
+            return "其他";
+        }
+        if (containsCity(tier1Cities, normalizedCity)) {
+            return "一线";
+        }
+        if (containsCity(newTier1Cities, normalizedCity)) {
+            return "新一线";
+        }
+        return "其他";
+    }
+
     /** 按两地中較低的城市等级返回保守估算时长。 */
     private int estimateByCityTier(String fromCity, String toCity) {
         int fromRank = cityTierRank(fromCity);

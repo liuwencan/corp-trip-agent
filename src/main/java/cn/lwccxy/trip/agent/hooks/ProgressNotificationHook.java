@@ -43,6 +43,7 @@ public class ProgressNotificationHook implements Hook {
 
     private static final Map<String, String> AGENT_NAMES = Map.of(
             "MasterAgent", "主智能体",
+            "BookingAgent", "预订下单智能体",
             "OrderManagementAgent", "行程单智能体",
             "TripOrderManagementAgent", "行程单智能体",
             "GeneralInfoAgent", "通用信息智能体");
