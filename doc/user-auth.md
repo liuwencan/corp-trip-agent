@@ -8,7 +8,7 @@
 
 ## 数据库迁移
 
-执行迁移前备份 `corptrip`，并只读确认两张新表不存在。新环境执行 `sql/init.sql`；已有环境按前置版本执行 `sql/migration/V20261014__user_auth_satoken.sql`，不得重复执行，也不得由应用启动自动建表或修改结构。执行后核对两张表的结构、唯一用户名索引，并确认现有 `t_config` 和 Prompt 表未变化。
+执行迁移前备份 `corptrip`，并只读确认目标列结构。新环境执行 `sql/init.sql`；已有环境先执行 `sql/migration/V20261014__user_auth_satoken.sql`，再执行 `sql/migration/V20261114__user_nickname_avatar.sql`，不得重复执行，也不得由应用启动自动建表或修改结构。头像 URL 长度超过 20 个字符，迁移会将 `avatar` 定义为 `varchar(255)`；执行后核对 `nick_name`、`avatar` 的列类型和默认值，以及唯一用户名索引。迁移回滚前先停用依赖新字段的应用版本并备份；确认可丢弃已生成的昵称和头像后，按 `avatar`、`nick_name` 顺序删除两列。
 
 首个管理员流程：先通过注册接口创建候选账户，运维线下核对明确的用户 ID 和用户名，在受控 SQL 事务中将其 `role` 更新为 `ADMIN` 并递增 `credential_version`，确认只影响一行后重新登录。迁移不创建默认管理员、不包含默认密码。回滚应用需先进入维护窗口；如确需删除新表，先备份，再删除审计表、用户表，明确会丢失账户数据且不得影响既有业务表。
 
@@ -27,7 +27,7 @@ MySQL DDL 自动提交，迁移失败不能依赖事务回滚；应根据 `SHOW 
 
 ## 接口
 
-- `POST /auth/register`：`{"username":"alice_1","password":"占位密码"}`，始终注册为 `USER`，不自动登录。
+- `POST /auth/register`：`{"username":"alice_1","password":"占位密码"}`，始终注册为 `USER`，不自动登录；系统自动生成 `途灵` 加六位数字的昵称，并随机分配一个默认头像 URL。
 - `POST /auth/login`：返回 `tokenName`、`tokenPrefix`、`tokenValue`、`expiresIn` 和安全用户信息。`tokenValue` 为不含前缀的原始 Token；后续请求头的值应由非空前缀、一个空格和 Token 拼接，未配置前缀时直接使用 Token。
 - `GET /auth/me`、`POST /auth/logout`、`PUT /auth/password`：当前用户信息、退出当前 Token、使用旧密码和新密码改密。
 - `POST /system/user/query`：管理员分页查询用户。

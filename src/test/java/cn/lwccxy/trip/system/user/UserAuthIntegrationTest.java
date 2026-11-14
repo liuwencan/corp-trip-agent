@@ -93,6 +93,17 @@ class UserAuthIntegrationTest {
   }
   var other=call("POST","/auth/register",null,Map.of("username",username+"x","password",password),200);
   assertThat(other.path("data").path("role").asText()).isEqualTo("USER");
+  assertThat(other.path("data").path("nickName").asText()).matches("途灵\\d{6}");
+  assertThat(other.path("data").path("avatar").asText()).isIn(
+      "http://119.29.203.49:9011/community/avatar/20260505/defaultAvatar1.png",
+      "http://119.29.203.49:9011/community/avatar/20260505/defaultAvatar2.png",
+      "http://119.29.203.49:9011/community/avatar/20260505/defaultAvatar3.png",
+      "http://119.29.203.49:9011/community/avatar/20260505/defaultAvatar4.png");
+  Long otherId=other.path("data").path("id").asLong();
+  assertThat(jdbc.queryForObject("SELECT nick_name FROM t_user WHERE id=?",String.class,otherId))
+      .isEqualTo(other.path("data").path("nickName").asText());
+  assertThat(jdbc.queryForObject("SELECT avatar FROM t_user WHERE id=?",String.class,otherId))
+      .isEqualTo(other.path("data").path("avatar").asText());
   String hash=jdbc.queryForObject("SELECT password_hash FROM t_user WHERE id=?",String.class,id);
   String second=jdbc.queryForObject("SELECT password_hash FROM t_user WHERE username=?",String.class,username+"x");
   assertThat(hash).isNotEqualTo(second).isNotEqualTo(password);

@@ -18,6 +18,8 @@ public class UserEntity {
     private String role;
     private Boolean mustChangePassword;
     private Long credentialVersion;
+    private String nickName;
+    private String avatar;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

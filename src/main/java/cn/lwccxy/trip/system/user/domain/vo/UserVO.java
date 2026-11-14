@@ -10,6 +10,8 @@ public class UserVO {
     private String username;
     private String role;
     private Boolean mustChangePassword;
+    private String nickName;
+    private String avatar;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

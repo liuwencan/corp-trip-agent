@@ -16,6 +16,8 @@ CREATE TABLE `t_user` (
     `role` varchar(16) NOT NULL DEFAULT 'USER' COMMENT 'USER/ADMIN',
     `must_change_password` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否必须修改密码',
     `credential_version` bigint NOT NULL DEFAULT '0' COMMENT '凭据版本',
+    `nick_name` varchar(20) DEFAULT NULL COMMENT '昵称',
+    `avatar` varchar(255) DEFAULT NULL COMMENT '头像地址',
     `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),

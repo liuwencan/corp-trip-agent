@@ -11,6 +11,7 @@ public class RegisterForm {
     @NotBlank
     @jakarta.validation.constraints.Pattern(regexp = "[a-z0-9_]{3,32}")
     private String username;
+
     @ValidPassword
     @ToString.Exclude
     private String password;

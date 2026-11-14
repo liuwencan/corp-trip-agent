@@ -30,12 +30,20 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @Slf4j
 public class UserService extends ServiceImpl<UserMapper, UserEntity> {
+    private static final List<String> DEFAULT_AVATAR_URL_LIST = List.of(
+            "http://119.29.203.49:9011/community/avatar/20260505/defaultAvatar1.png",
+            "http://119.29.203.49:9011/community/avatar/20260505/defaultAvatar2.png",
+            "http://119.29.203.49:9011/community/avatar/20260505/defaultAvatar3.png",
+            "http://119.29.203.49:9011/community/avatar/20260505/defaultAvatar4.png"
+    );
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
     private final String dummyHash = passwordEncoder.encode(UUID.randomUUID().toString());
     @Resource private CurrentUser currentUser;
@@ -45,6 +53,7 @@ public class UserService extends ServiceImpl<UserMapper, UserEntity> {
     @Resource
     private PasswordResetLogMapper passwordResetLogMapper;
 
+    /** 注册用户并生成默认昵称与头像。 */
     public Response<UserVO> register(RegisterForm form) {
         String username = normalizeUsername(form.getUsername());
         if (!validUsername(username) || !validPassword(form.getPassword())) {
@@ -56,6 +65,10 @@ public class UserService extends ServiceImpl<UserMapper, UserEntity> {
         entity.setRole(UserRole.USER.name());
         entity.setMustChangePassword(false);
         entity.setCredentialVersion(0L);
+        // 默认昵称使用六位数字区分新用户，头像从固定资源列表随机分配。
+        entity.setNickName("途灵" + ThreadLocalRandom.current().nextInt(100_000, 1_000_000));
+        entity.setAvatar(DEFAULT_AVATAR_URL_LIST.get(
+                ThreadLocalRandom.current().nextInt(DEFAULT_AVATAR_URL_LIST.size())));
         try {
             userMapper.insert(entity);
         } catch (DuplicateKeyException ex) {
@@ -183,7 +196,8 @@ public class UserService extends ServiceImpl<UserMapper, UserEntity> {
     public UserVO toVO(UserEntity entity) {
         UserVO vo = new UserVO();
         vo.setId(entity.getId()); vo.setUsername(entity.getUsername()); vo.setRole(entity.getRole());
-        vo.setMustChangePassword(entity.getMustChangePassword()); vo.setCreateTime(entity.getCreateTime()); vo.setUpdateTime(entity.getUpdateTime());
+        vo.setMustChangePassword(entity.getMustChangePassword()); vo.setNickName(entity.getNickName());
+        vo.setAvatar(entity.getAvatar()); vo.setCreateTime(entity.getCreateTime()); vo.setUpdateTime(entity.getUpdateTime());
         return vo;
     }
 
