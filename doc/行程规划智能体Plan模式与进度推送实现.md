@@ -331,7 +331,7 @@ ProgressNotificationHook 是 Spring 单例，但不保存用户、sessionId 或�
 
 1. 读取 ToolUseBlock。
 2. 创建 AgentProgressVO。
-3. 设置事件 ID、Agent ID、Agent 展示名、时间戳和 running 状态。
+3. 设置 Agent 展示名、时间戳和 running 状态。
 4. 写入 toolCallId、toolName、tooldesc 和 input。
 5. 发送 SSE 事件 tool_start。
 6. 原始 AgentScope 事件继续向后执行。
@@ -364,7 +364,7 @@ completed 只代表工具执行阶段已返回，不等于业务操作一定成�
 5. 事件类型设置为 thinking。
 6. tooldesc 固定为“智能体输出”。
 7. output 写入当前增量文本。
-8. messageId 使用 accumulated 消息 ID；没有 accumulated 时退回 chunk ID。
+8. messageId 使用 accumulated 消息 ID；没有 accumulated 时退回 chunk ID。messageId 仅在 thinking 事件中非空时输出。
 9. 发送 thinking SSE 事件。
 
 ProgressNotificationHook 推送 thinking 是时间线展示；ChatAgentPipeline 另外会从主 Agent 的 EventType.REASONING 中发送 delta 事件，作为最终回答文本流。两者不要混为同一个协议字段。

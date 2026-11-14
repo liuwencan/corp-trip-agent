@@ -15,6 +15,8 @@ import org.springframework.context.annotation.Configuration;
 import javax.sql.DataSource;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 差旅智能体所有配置
@@ -22,6 +24,15 @@ import java.nio.file.Path;
 @Configuration
 public class CorpTripAgentConfig {
 
+    /**
+     * 为聊天流式请求提供虚拟线程执行器，避免意图识别和 Agent 推理占用请求线程。
+     *
+     * @return 聊天后台任务执行器
+     */
+    @Bean(name = "chatTaskExecutor", destroyMethod = "close")
+    public ExecutorService chatTaskExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor();
+    }
 
     /**
      * AgentScope MySQL 会话存储。

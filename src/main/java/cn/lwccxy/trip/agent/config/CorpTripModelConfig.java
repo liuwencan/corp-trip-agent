@@ -40,7 +40,7 @@ public class CorpTripModelConfig {
         Model model =
                 DashScopeChatModel.builder()
                         .apiKey(apiKey)
-                        .modelName("kimi-k3.1-pro")
+                        .modelName("qwen3.8-max-0902")
                         .stream(true) // 是否流式输出
                         .endpointType(EndpointType.MULTIMODAL)
                         .formatter(new DashScopeChatFormatter())
@@ -59,7 +59,7 @@ public class CorpTripModelConfig {
         Model model =
                 DashScopeChatModel.builder()
                         .apiKey(apiKey)
-                        .modelName("kimi-k3.1-pro")
+                        .modelName("qwen3.8-max-0902")
                         .stream(true) // 是否流式输出
                         .endpointType(EndpointType.MULTIMODAL) // 使用多模态端点
                         .build();

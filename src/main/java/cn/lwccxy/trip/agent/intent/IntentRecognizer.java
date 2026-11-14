@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import java.util.function.Consumer;
 
 /**
  * 意图识别器。
@@ -193,25 +194,49 @@ public class IntentRecognizer {
      * @return 按实际命中层级返回对应的强类型识别结果
      */
     public IntentRecognitionResult recognize(String question, List<ConversationTurn> history) {
+        return recognize(question, history, null);
+    }
+
+    /**
+     * 按分层流程识别问题，并在关键阶段通过监听器报告进度。
+     *
+     * @param question 当前用户问题
+     * @param history 当前会话历史，按时间顺序排列
+     * @param progressListener 意图识别进度监听器，可为空
+     * @return 按实际命中层级返回的强类型识别结果
+     */
+    public IntentRecognitionResult recognize(String question, List<ConversationTurn> history,
+                                               Consumer<IntentRecognitionProgress> progressListener) {
+        // 先推送结构分析阶段，再运行不依赖模型的 L0 启发式判断。
+        publishProgress(progressListener, "structure_analysis", "started", "正在分析问题结构", null, null);
         // L0 仅提供结构线索；即使发现多个子句，也继续让 L1/L2 尝试确定各自意图。
         long startNanos = System.nanoTime();
         RecognitionResultL0 recognitionResultL0 = recognizeL0(question);
         long costMs = (System.nanoTime() - startNanos) / 1_000_000;
         logger.info("[意图识别L0层] 多结构候选={}, 原因={}, 耗时={}ms",
                 recognitionResultL0.multiIntent(), recognitionResultL0.cause(), costMs);
+        publishProgress(progressListener, "structure_analysis", "completed",
+                "问题结构分析完成，开始识别业务意图", null, RecognitionLevel.L0);
 
         // 原问题的 L1/L2 未形成单一结果时，只执行一次改写，避免重复模型调用。
-        IntentRecognitionResult firstPass = recognizeL1ThenL2(question, "原问题");
+        IntentRecognitionResult firstPass = recognizeL1ThenL2(question, "原问题", "original", progressListener);
         if (firstPass != null) {
             return firstPass;
         }
 
+        // 只有原问题无法形成唯一意图时，才调用轻量模型补足上下文信息。
+        publishProgress(progressListener, "question_rewrite", "started", "正在结合会话上下文优化问题表述",
+                null, null);
         QuestionRewriteResult rewriteResult = rewriteQuestion(question, history);
         String rewrittenQuestion = rewriteResult == null ? null : rewriteResult.rewrittenQuestion();
         boolean hasRewrittenQuestion = rewrittenQuestion != null && !rewrittenQuestion.isBlank()
                 && !rewrittenQuestion.equals(question == null ? null : question.trim());
+        publishProgress(progressListener, "question_rewrite", "completed",
+                hasRewrittenQuestion ? "问题表述优化完成，继续识别" : "未生成有效改写，继续按原问题识别",
+                null, null, hasRewrittenQuestion ? rewrittenQuestion : null);
         if (hasRewrittenQuestion) {
-            IntentRecognitionResult rewrittenPass = recognizeL1ThenL2(rewrittenQuestion, "改写问题");
+            IntentRecognitionResult rewrittenPass = recognizeL1ThenL2(
+                    rewrittenQuestion, "改写问题", "rewritten", progressListener);
             if (rewrittenPass != null) {
                 // 改写后的问题参与本轮识别时，将其附加到结果供聊天接口回传。
                 return new RecognitionResultWithRewrite(
@@ -222,7 +247,11 @@ public class IntentRecognizer {
         }
 
         // 原问题和改写问题均未形成确定结果时才调用 L3，保留用户原始语义作为最终判断依据。
+        publishProgress(progressListener, "llm_fallback", "started", "规则和语义检索未能唯一确定，正在进行模型识别",
+                null, null);
         IntentRecognitionResult l3Result = recognizeL3(question);
+        publishProgress(progressListener, "llm_fallback", "completed", "模型识别完成",
+                null, RecognitionLevel.L3);
         return rewriteResult != null
                 ? new RecognitionResultWithRewrite(l3Result, rewrittenQuestion, rewriteResult.reason())
                 : l3Result;
@@ -233,9 +262,15 @@ public class IntentRecognizer {
      *
      * @param question 本轮待识别问题
      * @param passName 流程轮次名称
+     * @param passCode 流程轮次编码
+     * @param progressListener 意图识别进度监听器
      * @return L1 或 L2 确定的结果；需要继续时返回 null
      */
-    private IntentRecognitionResult recognizeL1ThenL2(String question, String passName) {
+    private IntentRecognitionResult recognizeL1ThenL2(String question, String passName, String passCode,
+                                                       Consumer<IntentRecognitionProgress> progressListener) {
+        // 规则匹配和语义检索分开报告，使前端能准确呈现当前识别层级。
+        publishProgress(progressListener, "rule_matching", "started", "正在通过规则识别" + passName,
+                passCode, RecognitionLevel.L1);
         long startNanos = System.nanoTime();
         L1RecognitionResult l1 = recognizeL1(question);
         long costMs = (System.nanoTime() - startNanos) / 1_000_000;
@@ -250,16 +285,66 @@ public class IntentRecognizer {
         logger.info("[意图识别L1层] 轮次={}, 子句数={}, 候选意图={}, 多意图={}, 耗时={}ms",
                 passName, l1.clauses().size(), matchedIntents, l1Ambiguous, costMs);
         if (!l1Ambiguous && matchedIntents.size() == 1) {
+            publishProgress(progressListener, "rule_matching", "completed", passName + "已通过规则匹配确定意图",
+                    passCode, RecognitionLevel.L1);
             return new RecognitionResultL1(false, matchedIntents.get(0));
         }
+        publishProgress(progressListener, "rule_matching", "completed", "规则匹配未能唯一确定，继续语义检索",
+                passCode, RecognitionLevel.L1);
 
         // L1 存在多意图线索时仍让 L2 尝试语义消歧；只有 L2 也不能确定才进入改写或 L3。
+        publishProgress(progressListener, "semantic_retrieval", "started", "正在通过语义检索进一步判断",
+                passCode, RecognitionLevel.L2);
         startNanos = System.nanoTime();
         RecognitionResultL2 l2 = recognizeL2(question);
         costMs = (System.nanoTime() - startNanos) / 1_000_000;
         logger.info("[意图识别L2层] 轮次={}, 意图={}, 需继续={}, 耗时={}ms",
                 passName, l2.intentType(), l2.multiIntent(), costMs);
+        publishProgress(progressListener, "semantic_retrieval", "completed",
+                l2.multiIntent() ? "语义检索仍无法唯一确定，继续后续识别" : "语义检索已确定意图",
+                passCode, RecognitionLevel.L2);
         return l2.multiIntent() ? null : l2;
+    }
+
+    /**
+     * 通知意图识别进度监听器；监听器异常不应影响业务识别结果。
+     *
+     * @param progressListener 意图识别进度监听器
+     * @param stage 当前阶段编码
+     * @param status 当前阶段状态
+     * @param message 前端展示文案
+     * @param passName 当前识别轮次编码
+     * @param level 当前识别层级
+     */
+    private void publishProgress(Consumer<IntentRecognitionProgress> progressListener, String stage,
+                                 String status, String message, String passName, RecognitionLevel level) {
+        publishProgress(progressListener, stage, status, message, passName, level, null);
+    }
+
+    /**
+     * 通知意图识别进度监听器，并在问题改写完成时携带改写文本。
+     *
+     * @param progressListener 意图识别进度监听器
+     * @param stage 当前阶段编码
+     * @param status 当前阶段状态
+     * @param message 前端展示文案
+     * @param passName 当前识别轮次编码
+     * @param level 当前识别层级
+     * @param rewrittenQuestion 当前生成的改写问题
+     */
+    private void publishProgress(Consumer<IntentRecognitionProgress> progressListener, String stage,
+                                 String status, String message, String passName, RecognitionLevel level,
+                                 String rewrittenQuestion) {
+        if (progressListener == null) {
+            return;
+        }
+        try {
+            // 进度只用于展示，客户端断连或监听器错误不能中断后端识别。
+            progressListener.accept(new IntentRecognitionProgress(
+                    stage, status, message, passName, level, rewrittenQuestion));
+        } catch (RuntimeException exception) {
+            logger.debug("意图识别进度回调失败", exception);
+        }
     }
 
     /**
@@ -791,6 +876,22 @@ public class IntentRecognizer {
      */
     public boolean isMultiIntentCandidate(String question) {
         return question != null && !question.isBlank() && recognizeL0(question).multiIntent();
+    }
+
+    /**
+     * 意图识别阶段的进度信息，供调用方映射为自身的事件协议。
+     *
+     * @param stage 阶段编码
+     * @param status 阶段状态
+     * @param message 前端展示文案
+     * @param passName 当前识别轮次编码；没有轮次概念时为空
+     * @param level 当前涉及的识别层级；没有对应层级时为空
+     * @param rewrittenQuestion 当前问题的改写文本；非改写阶段为空
+     */
+    public record IntentRecognitionProgress(String stage, String status, String message,
+                                            String passName, RecognitionLevel level,
+                                            String rewrittenQuestion) {
+
     }
 
     /** 查询改写使用的会话历史轮次。 */

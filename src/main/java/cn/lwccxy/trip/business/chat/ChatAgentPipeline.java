@@ -48,6 +48,7 @@ import reactor.util.context.Context;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ExecutorService;
 
 
 /** 负责执行主智能体流式对话，并将事件推送给调用方。 */
@@ -64,6 +65,7 @@ public class ChatAgentPipeline {
     private final SseEmitterRegistry sseEmitterRegistry;
     private final Model lightWeightModel;
     private final IntentRecognizer intentRecognizer;
+    private final ExecutorService chatTaskExecutor;
 
     /** 查询改写最多读取的历史消息数量，避免整段会话进入改写模型上下文。 */
     private static final int INTENT_HISTORY_MESSAGE_LIMIT = 12;
@@ -73,7 +75,8 @@ public class ChatAgentPipeline {
                              ConversationMapper conversationMapper, MessageMapper messageMapper,
                              TransactionTemplate transactions, SseEmitterRegistry sseEmitterRegistry,
                              @Qualifier("lightWeightModel") Model lightWeightModel,
-                             IntentRecognizer intentRecognizer) {
+                             IntentRecognizer intentRecognizer,
+                             @Qualifier("chatTaskExecutor") ExecutorService chatTaskExecutor) {
         this.conversations = conversations;
         this.coordinator = coordinator;
         this.conversationMapper = conversationMapper;
@@ -82,6 +85,7 @@ public class ChatAgentPipeline {
         this.sseEmitterRegistry = sseEmitterRegistry;
         this.lightWeightModel = lightWeightModel;
         this.intentRecognizer = intentRecognizer;
+        this.chatTaskExecutor = chatTaskExecutor;
     }
 
 
@@ -109,123 +113,146 @@ public class ChatAgentPipeline {
                 .userId(userId.toString())
                 .traceId(traceId)
                 .builder();
-        // 将Agent运行期间上下文放到ThreadLocal里面, 用于传递到Agent的构建中
-        // 因为Agent是多例模式, 每次通过applicationContext.get()方法获取其实都是创建一个新的对象
-        AgentRuntimeContextHolder.set(agentRuntimeContext);
-
-        // ============ 意图识别 =============
-        // 在构建 prototype MasterAgent 前完成识别，使本轮 Agent 能拿到稳定的路由提示。
-        IntentRecognizer.IntentRecognitionResult intentResult = intentRecognition(question, intentHistory);
-
-        StringBuilder answer = new StringBuilder();
-        AtomicBoolean receivedFinalResult = new AtomicBoolean();
-        AtomicBoolean terminal = new AtomicBoolean();
-
-        // 主智能体创建阶段会读取 ThreadLocal，并将上下文复制到本次 Agent 专属 Hook 中。
-        ReActAgent masterAgent;
         try {
-            masterAgent = SpringContextUtil.getBean("masterAgent", ReActAgent.class);
-        } finally {
-            // Agent 已经捕获上下文，及时清理请求线程中的 ThreadLocal，避免线程池复用导致上下文泄漏。
-            AgentRuntimeContextHolder.clear();
-        }
+            chatTaskExecutor.execute(() -> {
+            try {
+                // 将Agent运行期间上下文放到ThreadLocal里面, 用于传递到Agent的构建中
+                // 因为Agent是多例模式, 每次通过applicationContext.get()方法获取其实都是创建一个新的对象
+                AgentRuntimeContextHolder.set(agentRuntimeContext);
 
-        // 用户发送的消息
-        Msg userMsg = Msg.builder()
-                .role(MsgRole.USER)
-                .textContent(question)
-                .build();
-        List<Msg> inputMsgs = new ArrayList<>();
-        inputMsgs.add(userMsg);
-        buildMasterAgentMsgs(inputMsgs, intentResult);
+                // ============ 意图识别 =============
+                // 推送意图开始事件
+                SseEmitterSender.send(emitter, SseEventEnum.INTENT_RECOGNITION_START, traceId);
+                // 在构建 prototype MasterAgent 前完成识别，使本轮 Agent 能拿到稳定的路由提示。
+                IntentRecognizer.IntentRecognitionResult intentResult = intentRecognition(
+                        question, intentHistory, emitter, traceId);
+                // 在结束事件前单独回传识别摘要，前端无需等待主 Agent 完成即可展示路由结果。
+                sendIntentRecognitionResult(emitter, traceId, intentResult);
+                // 推送意图结束事件
+                SseEmitterSender.send(emitter, SseEventEnum.INTENT_RECOGNITION_END, traceId);
 
-        // 记录首Token时长：以提交 Agent 流请求的时刻为起点，统计首个可见文本 Token 的端到端等待时长。
-        long agentStartNanos = System.nanoTime();
-        AtomicBoolean firstTokenRecorded = new AtomicBoolean();
+                StringBuilder answer = new StringBuilder();
+                AtomicBoolean receivedFinalResult = new AtomicBoolean();
+                AtomicBoolean terminal = new AtomicBoolean();
 
-        // 将识别结果作为一次性系统消息传给主 Agent，原始用户消息仍单独保留，避免改写用户语义或污染历史。
-        Flux<Event> events = masterAgent.stream(inputMsgs, StreamOptions.defaults());
-        events.subscribe(event -> {
-            if (terminal.get()) {
-                return;
-            }
-            // 推理事件
-            if (event.getType() == EventType.REASONING) {
-                String delta = event.getMessage().getTextContent();
-                if(event.isLast()){
-                    // 如果是最后一个事件不进行推送, 防止前端重复渲染
-                    return;
+                // 主智能体创建阶段会读取 ThreadLocal，并将上下文复制到本次 Agent 专属 Hook 中。
+                ReActAgent masterAgent;
+                try {
+                    masterAgent = SpringContextUtil.getBean("masterAgent", ReActAgent.class);
+                } finally {
+                    // Agent 已经捕获上下文，及时清理请求线程中的 ThreadLocal，避免线程池复用导致上下文泄漏。
+                    AgentRuntimeContextHolder.clear();
                 }
 
-                if (delta != null) {
-                    answer.append(delta);
-                }
+                // 用户发送的消息
+                Msg userMsg = Msg.builder()
+                        .role(MsgRole.USER)
+                        .textContent(question)
+                        .build();
+                List<Msg> inputMsgs = new ArrayList<>();
+                inputMsgs.add(userMsg);
+                buildMasterAgentMsgs(inputMsgs, intentResult);
 
-                if(delta != null && !delta.isEmpty()){
-                    // 记录首Token时长
-                    recordFirstTokenLatency(activeConversationId, agentStartNanos,
-                            firstTokenRecorded);
-                    SseEmitterSender.send(emitter, SseEventEnum.DELTA, delta);
-                }
-            } else if (event.getType() == EventType.AGENT_RESULT) {
-                Msg result = event.getMessage();
-                GenerateReason reason = result == null ? null : result.getGenerateReason();
+                // 记录首Token时长：以提交 Agent 流请求的时刻为起点，统计首个可见文本 Token 的端到端等待时长。
+                long agentStartNanos = System.nanoTime();
+                AtomicBoolean firstTokenRecorded = new AtomicBoolean();
 
-                // 某些模型不会发送中间推理事件，首次文本可能只出现在最终 Agent 结果中。
-                if (result != null && result.getTextContent() != null
-                        && !result.getTextContent().isBlank()) {
-                    recordFirstTokenLatency(activeConversationId, agentStartNanos,
-                            firstTokenRecorded);
-                }
+                // 将识别结果作为一次性系统消息传给主 Agent，原始用户消息仍单独保留，避免改写用户语义或污染历史。
+                Flux<Event> events = masterAgent.stream(inputMsgs, StreamOptions.defaults());
+                events.subscribe(event -> {
+                    if (terminal.get()) {
+                        return;
+                    }
+                    // 推理事件
+                    if (event.getType() == EventType.REASONING) {
+                        String delta = event.getMessage().getTextContent();
+                        if(event.isLast()){
+                            // 如果是最后一个事件不进行推送, 防止前端重复渲染
+                            return;
+                        }
 
-                if (isAskUserSuspension(result)) {
-                    // ask_user 暂停属于等待用户输入，Hook 已发送 ask 事件，此处正常结束当前 SSE。
-                    if (terminal.compareAndSet(false, true)) {
+                        if (delta != null) {
+                            answer.append(delta);
+                        }
+
+                        if(delta != null && !delta.isEmpty()){
+                            // 记录首Token时长
+                            recordFirstTokenLatency(activeConversationId, agentStartNanos,
+                                    firstTokenRecorded);
+                            SseEmitterSender.send(emitter, SseEventEnum.DELTA, delta);
+                        }
+                    } else if (event.getType() == EventType.AGENT_RESULT) {
+                        Msg result = event.getMessage();
+                        GenerateReason reason = result == null ? null : result.getGenerateReason();
+
+                        // 某些模型不会发送中间推理事件，首次文本可能只出现在最终 Agent 结果中。
+                        if (result != null && result.getTextContent() != null
+                                && !result.getTextContent().isBlank()) {
+                            recordFirstTokenLatency(activeConversationId, agentStartNanos,
+                                    firstTokenRecorded);
+                        }
+
+                        if (isAskUserSuspension(result)) {
+                            // ask_user 暂停属于等待用户输入，Hook 已发送 ask 事件，此处正常结束当前 SSE。
+                            if (terminal.compareAndSet(false, true)) {
+                                emitter.complete();
+                            }
+                            return;
+                        }
+
+                        if (result == null || result.getRole() != MsgRole.ASSISTANT
+                                || (reason != null && reason != GenerateReason.MODEL_STOP
+                                && reason != GenerateReason.STRUCTURED_OUTPUT)) {
+                            if (terminal.compareAndSet(false, true)) {
+                                sendError(emitter);
+                                emitter.complete();
+                            }
+                            return;
+                        }
+
+                        // 最终消息覆盖可能包含中间轮次内容的增量缓存，作为持久化正文的权威结果。
+                        String resultText = result.getTextContent();
+                        log.info("本轮对话完毕, Agent最终输出的结果是： {}", resultText);
+
+                        // 仅在收到合法的最终 assistant 结果后落库并发送完成事件。
+                        append(userId, activeConversationId, MessageRole.ASSISTANT, resultText, modelName());
+                        // 完成事件回传意图识别阶段生成的问题改写；Map 可保留未改写时的 null 值。
+                        Map<String, Object> completePayload = new LinkedHashMap<>();
+                        completePayload.put("conversationId", activeConversationId);
+                        completePayload.put("intents", toIntentPayload(intentResult));
+                        completePayload.put("isMultiIntent", intentResult != null && intentResult.multiIntent());
+                        completePayload.put("rewrittenQuestion",
+                                intentResult == null ? null : intentResult.rewrittenQuestion());
+                        completePayload.put("rewriteReason",
+                                intentResult == null ? null : intentResult.rewriteReason());
+                        sendEvent(emitter, SseEventEnum.COMPLETE, completePayload);
                         emitter.complete();
                     }
-                    return;
-                }
-
-                if (result == null || result.getRole() != MsgRole.ASSISTANT
-                        || (reason != null && reason != GenerateReason.MODEL_STOP
-                        && reason != GenerateReason.STRUCTURED_OUTPUT)) {
+                }, throwable -> {
+                    log.warn("[ChatAgentPipeline] Agent conversation {} failed", activeConversationId, throwable);
                     if (terminal.compareAndSet(false, true)) {
                         sendError(emitter);
                         emitter.complete();
                     }
-                    return;
-                }
+                }, new Runnable() {
+                    @Override
+                    public void run() {
 
-                // 最终消息覆盖可能包含中间轮次内容的增量缓存，作为持久化正文的权威结果。
-                String resultText = result.getTextContent();
-                log.info("本轮对话完毕, Agent最终输出的结果是： {}", resultText);
-
-                // 仅在收到合法的最终 assistant 结果后落库并发送完成事件。
-                append(userId, activeConversationId, MessageRole.ASSISTANT, resultText, modelName());
-                // 完成事件回传意图识别阶段生成的问题改写；Map 可保留未改写时的 null 值。
-                Map<String, Object> completePayload = new LinkedHashMap<>();
-                completePayload.put("conversationId", activeConversationId);
-                completePayload.put("intents", toIntentPayload(intentResult));
-                completePayload.put("isMultiIntent", intentResult != null && intentResult.multiIntent());
-                completePayload.put("rewrittenQuestion",
-                        intentResult == null ? null : intentResult.rewrittenQuestion());
-                completePayload.put("rewriteReason",
-                        intentResult == null ? null : intentResult.rewriteReason());
-                sendEvent(emitter, SseEventEnum.COMPLETE, completePayload);
-                emitter.complete();
-            }
-        }, throwable -> {
-            log.warn("[ChatAgentPipeline] Agent conversation {} failed", activeConversationId, throwable);
-            if (terminal.compareAndSet(false, true)) {
-                sendError(emitter);
-                emitter.complete();
-            }
-        }, new Runnable() {
-            @Override
-            public void run() {
-
-            }
-        }, Context.of("agentRuntimeContext", agentRuntimeContext));
+                    }
+                }, Context.of("agentRuntimeContext", agentRuntimeContext));
+                    } catch (Exception exception) {
+                        logger.warn("[ChatAgentPipeline] 鍚庡彴鎵ц浼氳瘽澶辫触, conversationId={}",
+                                activeConversationId, exception);
+                        sendError(emitter);
+                        emitter.complete();
+                    }
+                    });
+        } catch (RuntimeException exception) {
+            logger.warn("[ChatAgentPipeline] 鏃犳硶鎻愪氦浼氳瘽鍚庡彴浠诲姟, conversationId={}",
+                    activeConversationId, exception);
+            sendError(emitter);
+            emitter.complete();
+        }
 
         return emitter;
     }
@@ -279,13 +306,19 @@ public class ChatAgentPipeline {
      * 意图识别失败不能阻断正常对话，因此异常时使用 UNKNOWN 结果继续交给 MasterAgent。</p>
      *
      * @param question 用户原始问题
+     * @param history 当前会话历史
+     * @param emitter 当前请求的 SSE 连接
+     * @param traceId 当前请求追踪标识
      * @return 识别结果；识别异常时返回 UNKNOWN 的 L3 结果
      */
     private IntentRecognizer.IntentRecognitionResult intentRecognition(
-            String question, List<IntentRecognizer.ConversationTurn> history) {
+            String question, List<IntentRecognizer.ConversationTurn> history,
+            SseEmitter emitter, String traceId) {
         long startNanos = System.nanoTime();
         try {
-            IntentRecognizer.IntentRecognitionResult result = intentRecognizer.recognize(question, history);
+            // 将识别器内部的阶段信息转成 SSE 事件，同时保持识别器不依赖 Web 层协议。
+            IntentRecognizer.IntentRecognitionResult result = intentRecognizer.recognize(
+                    question, history, progress -> sendIntentProgress(emitter, traceId, progress));
             long costMs = (System.nanoTime() - startNanos) / 1_000_000;
             RecognitionLevel level = result == null || result.level() == null
                     ? RecognitionLevel.NONE : result.level();
@@ -301,8 +334,60 @@ public class ChatAgentPipeline {
             long costMs = (System.nanoTime() - startNanos) / 1_000_000;
             logger.warn("[ChatAgentPipeline意图编排] 意图识别失败，降级到 MasterAgent，耗时={}ms",
                     costMs, exception);
+            // 识别异常时明确通知前端已采用默认路由，避免进度停留在最后一个未完成阶段。
+            sendIntentProgress(emitter, traceId, new IntentRecognizer.IntentRecognitionProgress(
+                    "recognition_fallback", "completed", "意图识别暂不可用，已切换到默认路由",
+                    null, null, null));
             return new IntentRecognizer.RecognitionResultL3(false, IntentType.UNKNOWN);
         }
+    }
+
+    /**
+     * 将识别阶段转换为前端可消费的 SSE 进度事件。
+     *
+     * @param emitter 当前请求的 SSE 连接
+     * @param traceId 当前请求追踪标识
+     * @param progress 意图识别阶段信息
+     */
+    private void sendIntentProgress(SseEmitter emitter, String traceId,
+                                    IntentRecognizer.IntentRecognitionProgress progress) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("traceId", traceId);
+        payload.put("stage", progress.stage());
+        payload.put("status", progress.status());
+        payload.put("message", progress.message());
+        if (progress.passName() != null) {
+            payload.put("pass", progress.passName());
+        }
+        if (progress.level() != null) {
+            payload.put("level", progress.level().name());
+        }
+        // 改写结果只附加在改写完成事件中，避免其他阶段的 payload 出现无关字段。
+        if ("question_rewrite".equals(progress.stage()) && "completed".equals(progress.status())) {
+            payload.put("rewrittenQuestion", progress.rewrittenQuestion());
+        }
+        SseEmitterSender.send(emitter, SseEventEnum.INTENT_RECOGNITION_PROGRESS, payload);
+    }
+
+    /**
+     * 在意图识别结束事件前回传本轮识别摘要。
+     *
+     * @param emitter 当前请求的 SSE 连接
+     * @param traceId 当前请求追踪标识
+     * @param intentResult 意图识别结果
+     */
+    private void sendIntentRecognitionResult(SseEmitter emitter, String traceId,
+                                             IntentRecognizer.IntentRecognitionResult intentResult) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("traceId", traceId);
+        payload.put("stage", "recognition_result");
+        payload.put("status", "completed");
+        payload.put("message", "意图识别完成");
+        payload.put("level", intentResult.level() == null ? RecognitionLevel.NONE.name()
+                : intentResult.level().name());
+        payload.put("intents", toIntentPayload(intentResult));
+        payload.put("isMultiIntent", intentResult.multiIntent());
+        SseEmitterSender.send(emitter, SseEventEnum.INTENT_RECOGNITION_PROGRESS, payload);
     }
 
     /**

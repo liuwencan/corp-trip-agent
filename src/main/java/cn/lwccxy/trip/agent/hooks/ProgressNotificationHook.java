@@ -45,8 +45,10 @@ public class ProgressNotificationHook implements Hook {
             "MasterAgent", "主智能体",
             "BookingAgent", "预订下单智能体",
             "OrderManagementAgent", "行程单智能体",
-            "TripOrderManagementAgent", "行程单智能体",
-            "GeneralInfoAgent", "通用信息智能体");
+            "GeneralInfoAgent", "通用信息智能体",
+            "ItineraryPlanningAgent", "行程规划智能体");
+
+    public static final Set<String> AGENT_SETS = Set.of("MasterAgent", "BookingAgent", "OrderManagementAgent", "GeneralInfoAgent", "ItineraryPlanningAgent");
 
     private final SseEmitterRegistry sseEmitterRegistry;
 
@@ -92,13 +94,26 @@ public class ProgressNotificationHook implements Hook {
             AgentProgressVO payload;
             SseEventEnum eventType;
             if (event instanceof PreActingEvent actingEvent) {
+                // ============ 工具调用前 ================
                 if (actingEvent.getToolUse() == null) {
                     return Mono.just(event);
                 }
+
+                if (AGENT_SETS.contains(actingEvent.getToolUse().getName())){
+                    // 如果当前的工具是智能体调用的话, 不是具体的工具调用直接跳过推送
+                    return Mono.just(event);
+                }
+
                 eventType = SseEventEnum.TOOL_START;
                 payload = createPayload(event, eventType);
                 applyToolCall(payload, actingEvent.getToolUse());
             } else if (event instanceof PostActingEvent actingEvent) {
+                // ============ 工具调用后 ===============
+                if (AGENT_SETS.contains(actingEvent.getToolUse().getName())){
+                    // 如果当前的工具是智能体调用的话, 不是具体的工具调用直接跳过推送
+                    return Mono.just(event);
+                }
+
                 ToolResultBlock result = actingEvent.getToolResult();
                 if (result == null) {
                     return Mono.just(event);
@@ -118,6 +133,8 @@ public class ProgressNotificationHook implements Hook {
                 // 暂停等待外部处理应与正常返回区分，不能被前端误画为已完成。
                 payload.setStatus(result.isSuspended() ? "suspended" : "completed");
             } else if (event instanceof ReasoningChunkEvent reasoningEvent) {
+                // ============ 推理块 ===============
+
                 Msg chunk = reasoningEvent.getIncrementalChunk();
                 String text = chunk == null ? null : chunk.getTextContent();
                 // 保留有意义的空格增量，仅跳过无文本的工具调用片段，避免破坏文本拼接。
@@ -128,6 +145,7 @@ public class ProgressNotificationHook implements Hook {
                 payload = createPayload(event, eventType);
                 payload.setTooldesc("智能体输出");
                 payload.setOutput(text);
+                // 仅 thinking 增量需要消息标识；其他事件保持该字段为空并由 VO 序列化规则省略。
                 Msg accumulated = reasoningEvent.getAccumulated();
                 payload.setMessageId(accumulated == null ? chunk.getId() : accumulated.getId());
             } else {
@@ -143,7 +161,7 @@ public class ProgressNotificationHook implements Hook {
     }
 
     /**
-     * 创建所有时间线事件共用的标识、展示名称和事件发生时间。
+     * 创建所有时间线事件共用的类型、展示名称和事件发生时间。
      *
      * @param event 原始事件
      * @param eventType SSE 事件类型
@@ -153,10 +171,8 @@ public class ProgressNotificationHook implements Hook {
         Agent agent = event.getAgent();
         String name = agent.getName();
         AgentProgressVO payload = new AgentProgressVO();
-        // 实例标识用于隔离同名智能体，事件标识用于前端区分每一次推送。
-        payload.setEventId(UUID.randomUUID().toString());
+        // 保留 Agent 展示名和原始事件时间，供前端呈现来源与发生时刻。
         payload.setEventType(eventType.getCode());
-        payload.setAgentId(agent.getAgentId());
         payload.setAgentName(name == null ? "未知智能体" : AGENT_NAMES.getOrDefault(name, name));
         payload.setTimestamp(event.getTimestamp());
         payload.setStatus("running");

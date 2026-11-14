@@ -10,7 +10,9 @@ public enum SseEventEnum {
     INIT("init", "流式响应初始化事件"),
     STATUS("status", "智能体执行状态事件"),
     THINKING("thinking", "智能体思考过程事件"),
-
+    INTENT_RECOGNITION_START("intent_start", "意图识别开始"),
+    INTENT_RECOGNITION_PROGRESS("intent_progress", "意图识别进度"),
+    INTENT_RECOGNITION_END("intent_end", "意图识别结束"),
     // =========== 工具枚举 ==============
     TOOL_START("tool_start", "工具开始执行"),
     TOOL_RESULT("tool_result", "工具执行结果"),
