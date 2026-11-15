@@ -1,5 +1,6 @@
 package cn.lwccxy.trip.business.chat;
 
+import cn.lwccxy.trip.agent.AgentRegistry;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.enums.IntentType;
@@ -47,7 +48,6 @@ import reactor.util.context.Context;
 
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -64,10 +64,10 @@ public class ChatAgentPipeline {
     private final MessageMapper messageMapper;
     private final TransactionTemplate transactions;
     private final SseEmitterRegistry sseEmitterRegistry;
+    private final AgentRegistry agentRegistry;
     private final Model lightWeightModel;
     private final IntentRecognizer intentRecognizer;
     private final ExecutorService chatTaskExecutor;
-    private final Map<Long, ReActAgent> activeAgents = new ConcurrentHashMap<>();
 
     /** 查询改写最多读取的历史消息数量，避免整段会话进入改写模型上下文。 */
     private static final int INTENT_HISTORY_MESSAGE_LIMIT = 12;
@@ -76,6 +76,7 @@ public class ChatAgentPipeline {
     public ChatAgentPipeline(ConversationService conversations, ConversationCoordinator coordinator,
                              ConversationMapper conversationMapper, MessageMapper messageMapper,
                              TransactionTemplate transactions, SseEmitterRegistry sseEmitterRegistry,
+                             AgentRegistry agentRegistry,
                              @Qualifier("lightWeightModel") Model lightWeightModel,
                              IntentRecognizer intentRecognizer,
                              @Qualifier("chatTaskExecutor") ExecutorService chatTaskExecutor) {
@@ -85,6 +86,7 @@ public class ChatAgentPipeline {
         this.messageMapper = messageMapper;
         this.transactions = transactions;
         this.sseEmitterRegistry = sseEmitterRegistry;
+        this.agentRegistry = agentRegistry;
         this.lightWeightModel = lightWeightModel;
         this.intentRecognizer = intentRecognizer;
         this.chatTaskExecutor = chatTaskExecutor;
@@ -148,8 +150,10 @@ public class ChatAgentPipeline {
                     AtomicBoolean terminal = new AtomicBoolean();
                     // 将识别结果作为一次性系统消息传给主 Agent，原始用户消息仍单独保留，避免改写用户语义或污染历史。
                     Flux<Event> events = masterAgent.stream(inputMsgs, StreamOptions.defaults());
-                    events.doOnSubscribe(subscription -> registerActiveAgent(activeConversationId, masterAgent))
-                            .doFinally(signal -> activeAgents.remove(activeConversationId, masterAgent))
+                    events.doOnSubscribe(subscription ->
+                                    agentRegistry.register(activeConversationId.toString(), masterAgent))
+                            .doFinally(signal ->
+                                    agentRegistry.unregister(activeConversationId.toString(), masterAgent))
                             .subscribe(event -> {
                                 if (terminal.get()) {
                                     return;
@@ -252,25 +256,19 @@ public class ChatAgentPipeline {
      * @param conversationId 要中断的会话标识
      */
     public void interrupt(Long userId, Long conversationId) {
-        // 中断前校验会话归属，避免通过猜测会话 ID 关闭其他用户的流。
+        // 1. 校验会话归属, 防止越权中断其他用户的会话
         conversations.owned(userId, conversationId);
-        ReActAgent agent = activeAgents.get(conversationId);
-        if (agent != null) {
-            // AgentScope 会在推理流程中检查中断标志，并按 Agent 自身的中断逻辑结束当前执行。
-            agent.interrupt();
-        }
-    }
-
-    /**
-     * 登记正在订阅执行的 Agent，并中断同一会话被新一轮替换的旧 Agent。
-     *
-     * @param conversationId 会话标识
-     * @param agent 当前会话的 Agent 实例
-     */
-    private void registerActiveAgent(Long conversationId, ReActAgent agent) {
-        ReActAgent previousAgent = activeAgents.put(conversationId, agent);
-        if (previousAgent != null && previousAgent != agent) {
-            previousAgent.interrupt();
+        // 2. 从Map里面去获取agent实例, 调用提供的中断方法 interrupt() 执行中断
+        // Registry 内部负责查询会话当前的 Agent 并发出中断请求。
+        boolean interrupt = agentRegistry.interrupt(conversationId.toString());
+        if (interrupt) {
+            SseEmitter emitter = sseEmitterRegistry.getEmitter(conversationId.toString());
+            // 中断后通过回答增量事件提示用户，并在发送后结束当前 SSE 连接。
+            SseEmitterSender.send(emitter, SseEventEnum.DELTA,
+                    "已经成功中断Agent执行, 还有什么可以帮助到您的吗？");
+            if (emitter != null) {
+                emitter.complete();
+            }
         }
     }
 
@@ -717,8 +715,8 @@ public class ChatAgentPipeline {
 
         Flux<Event> events = masterAgent.stream(List.of(toolResultMsg));
         AtomicBoolean terminal = new AtomicBoolean();
-        events.doOnSubscribe(subscription -> registerActiveAgent(conversationId, masterAgent))
-                .doFinally(signal -> activeAgents.remove(conversationId, masterAgent))
+        events.doOnSubscribe(subscription -> agentRegistry.register(conversationId.toString(), masterAgent))
+                .doFinally(signal -> agentRegistry.unregister(conversationId.toString(), masterAgent))
                 .subscribe(event -> {
             if (terminal.get()) {
                 return;

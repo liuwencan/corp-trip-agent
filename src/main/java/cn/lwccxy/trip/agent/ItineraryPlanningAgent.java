@@ -2,6 +2,7 @@ package cn.lwccxy.trip.agent;
 
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
+import cn.lwccxy.trip.agent.hooks.AgentRegistryHook;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
 import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
@@ -23,6 +24,7 @@ import cn.lwccxy.trip.agent.tools.ProviderApiKeyTools;
 import cn.lwccxy.trip.agent.tools.TripOrderReadTools;
 import cn.lwccxy.trip.common.utils.RedisCacheUtil;
 import io.agentscope.core.ReActAgent;
+import io.agentscope.core.hook.PendingToolRecoveryHook;
 import io.agentscope.core.memory.LongTermMemory;
 import io.agentscope.core.memory.LongTermMemoryMode;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
@@ -70,6 +72,7 @@ public class ItineraryPlanningAgent {
     private final ModelUsageBillingHook modelUsageBillingHook;
     private final AgentExecutionMonitorHook agentExecutionMonitorHook;
     private final AgentTracePersistenceHook agentTracePersistenceHook;
+    private final AgentRegistryHook agentRegistryHook;
     private final LongTermMemoryRecordHook longTermMemoryRecordHook;
     private final TuniuApiKeyShellHook tuniuApiKeyShellHook;
     private final TuniuSearchResultHook tuniuSearchResultHook;
@@ -105,6 +108,7 @@ public class ItineraryPlanningAgent {
                                   ModelUsageBillingHook modelUsageBillingHook,
                                   AgentExecutionMonitorHook agentExecutionMonitorHook,
                                   AgentTracePersistenceHook agentTracePersistenceHook,
+                                  AgentRegistryHook agentRegistryHook,
                                   LongTermMemoryRecordHook longTermMemoryRecordHook,
                                   TuniuApiKeyShellHook tuniuApiKeyShellHook,
                                   TuniuSearchResultHook tuniuSearchResultHook,
@@ -124,6 +128,7 @@ public class ItineraryPlanningAgent {
         this.modelUsageBillingHook = modelUsageBillingHook;
         this.agentExecutionMonitorHook = agentExecutionMonitorHook;
         this.agentTracePersistenceHook = agentTracePersistenceHook;
+        this.agentRegistryHook = agentRegistryHook;
         this.longTermMemoryRecordHook = longTermMemoryRecordHook;
         this.tuniuApiKeyShellHook = tuniuApiKeyShellHook;
         this.tuniuSearchResultHook = tuniuSearchResultHook;
@@ -206,11 +211,11 @@ public class ItineraryPlanningAgent {
                 .memory(new AutoContextMemory(autoContextConfig, model))
                 // 搜索结果在通知及持久化前精简，确保后续模型推理读取替换后的消息。
                 // skillContentCollapseHook 在推理前折叠历史技能正文，避免每轮重放整份 SKILL.md。
-                .hooks(List.of(persistSessionHook, tuniuApiKeyShellHook, tuniuSearchResultHook,
+                .hooks(List.of(agentRegistryHook, persistSessionHook, tuniuApiKeyShellHook, tuniuSearchResultHook,
                         tuniuSearchResultCaptureHook, skillContentCollapseHook,
                         progressNotificationHook, modelUsageBillingHook, longTermMemoryRecordHook,
                         agentExecutionMonitorHook, agentTracePersistenceHook,
-                        new AutoContextHook()))
+                        new AutoContextHook(), new PendingToolRecoveryHook()))
                 .longTermMemory(longTermMemory)
                 .longTermMemoryMode(LongTermMemoryMode.AGENT_CONTROL) // AGENT_CONTROL模式：给Agent提供两个工具（检索/存储）由Agent决定何时调用工具进行存储长期记忆, 以及召回用户长期记忆
                 .build();

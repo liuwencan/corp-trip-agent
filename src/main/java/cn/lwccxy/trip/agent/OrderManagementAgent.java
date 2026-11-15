@@ -2,6 +2,7 @@ package cn.lwccxy.trip.agent;
 
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
+import cn.lwccxy.trip.agent.hooks.AgentRegistryHook;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
 import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
@@ -10,6 +11,7 @@ import cn.lwccxy.trip.agent.tools.TripOrderReadTools;
 import cn.lwccxy.trip.agent.tools.TripOrderWriteTools;
 import cn.lwccxy.trip.agent.tools.TripScheduleConflictTools;
 import io.agentscope.core.ReActAgent;
+import io.agentscope.core.hook.PendingToolRecoveryHook;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
 import io.agentscope.core.memory.autocontext.AutoContextMemory;
 import io.agentscope.core.model.Model;
@@ -30,6 +32,7 @@ public class OrderManagementAgent {
     private final ModelUsageBillingHook modelUsageBillingHook;
     private final AgentExecutionMonitorHook agentExecutionMonitorHook;
     private final AgentTracePersistenceHook agentTracePersistenceHook;
+    private final AgentRegistryHook agentRegistryHook;
     private final TripOrderReadTools tripOrderReadTools;
     private final TripOrderWriteTools tripOrderWriteTools;
     private final TripScheduleConflictTools tripScheduleConflictTools;
@@ -41,12 +44,14 @@ public class OrderManagementAgent {
                                 TripScheduleConflictTools tripScheduleConflictTools,
                                 ModelUsageBillingHook modelUsageBillingHook,
                                 AgentExecutionMonitorHook agentExecutionMonitorHook,
-                                AgentTracePersistenceHook agentTracePersistenceHook) {
+                                AgentTracePersistenceHook agentTracePersistenceHook,
+                                AgentRegistryHook agentRegistryHook) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
         this.modelUsageBillingHook = modelUsageBillingHook;
         this.agentExecutionMonitorHook = agentExecutionMonitorHook;
         this.agentTracePersistenceHook = agentTracePersistenceHook;
+        this.agentRegistryHook = agentRegistryHook;
         this.tripOrderReadTools = tripOrderReadTools;
         this.tripOrderWriteTools = tripOrderWriteTools;
         this.tripScheduleConflictTools = tripScheduleConflictTools;
@@ -85,8 +90,8 @@ public class OrderManagementAgent {
                 .toolkit(toolkit)
                 .toolExecutionContext(context)
                 .memory(new AutoContextMemory(autoContextConfig, model))
-                .hooks(List.of(persistSessionHook, agentExecutionMonitorHook,
-                        agentTracePersistenceHook, modelUsageBillingHook))
+                .hooks(List.of(agentRegistryHook, persistSessionHook, agentExecutionMonitorHook,
+                        agentTracePersistenceHook, modelUsageBillingHook, new PendingToolRecoveryHook()))
                 .build();
     }
 }

@@ -2,6 +2,7 @@ package cn.lwccxy.trip.agent;
 
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
+import cn.lwccxy.trip.agent.hooks.AgentRegistryHook;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
 import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
@@ -10,6 +11,7 @@ import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.tools.AskUserTool;
 import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
 import cn.lwccxy.trip.agent.tools.PolicyTools;
+import io.agentscope.core.hook.PendingToolRecoveryHook;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
 import io.agentscope.core.memory.autocontext.AutoContextMemory;
 import io.agentscope.core.model.ExecutionConfig;
@@ -56,6 +58,7 @@ public class GeneralInfoAgent {
     private final ModelUsageBillingHook modelUsageBillingHook;
     private final AgentExecutionMonitorHook agentExecutionMonitorHook;
     private final AgentTracePersistenceHook agentTracePersistenceHook;
+    private final AgentRegistryHook agentRegistryHook;
     private final DestinationLiveTools destinationLiveTools;
     private final PolicyTools policyTools;
 
@@ -78,7 +81,8 @@ public class GeneralInfoAgent {
                             PolicyTools policyTools,
                             ModelUsageBillingHook modelUsageBillingHook,
                             AgentExecutionMonitorHook agentExecutionMonitorHook,
-                            AgentTracePersistenceHook agentTracePersistenceHook) {
+                            AgentTracePersistenceHook agentTracePersistenceHook,
+                            AgentRegistryHook agentRegistryHook) {
         this.dataSource = dataSource;
         this.model = model;
         this.weatherMcpClient = weatherMcpClient;
@@ -94,6 +98,7 @@ public class GeneralInfoAgent {
         this.modelUsageBillingHook = modelUsageBillingHook;
         this.agentExecutionMonitorHook = agentExecutionMonitorHook;
         this.agentTracePersistenceHook = agentTracePersistenceHook;
+        this.agentRegistryHook = agentRegistryHook;
         this.destinationLiveTools = destinationLiveTools;
         this.policyTools = policyTools;
     }
@@ -147,8 +152,8 @@ public class GeneralInfoAgent {
                 .knowledge(corptripGuidelinesKnowledge).knowledge(corptripPolicyKnowledge) // 添加 差旅政策/差旅指南 知识库d
                 .ragMode(RAGMode.AGENTIC)
                 .memory(new AutoContextMemory(autoContextConfig, model))
-                .hooks(List.of(persistSessionHook, agentExecutionMonitorHook, agentTracePersistenceHook,
-                        progressNotificationHook, modelUsageBillingHook))
+                .hooks(List.of(agentRegistryHook, persistSessionHook, agentExecutionMonitorHook, agentTracePersistenceHook,
+                        progressNotificationHook, modelUsageBillingHook, new PendingToolRecoveryHook()))
                 .build();
     }
 }

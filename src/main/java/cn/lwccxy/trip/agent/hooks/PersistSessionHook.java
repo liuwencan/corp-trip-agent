@@ -71,4 +71,10 @@ public class PersistSessionHook implements Hook {
             return Mono.just(event);
         });
     }
+
+    @Override
+    public int priority() {
+        // 比 PendingToolRecoveryHook 的优先级要高, 因为 PendingToolRecoveryHook 需要拿到历史会话记忆去做处理兜底, 否则看不到记忆
+        return 9;
+    }
 }

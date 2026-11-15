@@ -7,6 +7,7 @@ import cn.lwccxy.trip.agent.memory.CropTripLongTermMemory;
 import cn.lwccxy.trip.agent.tools.*;
 import cn.lwccxy.trip.common.utils.RedisCacheUtil;
 import io.agentscope.core.ReActAgent;
+import io.agentscope.core.hook.PendingToolRecoveryHook;
 import io.agentscope.core.memory.LongTermMemory;
 import io.agentscope.core.memory.LongTermMemoryMode;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
@@ -64,6 +65,7 @@ public class BookingAgent {
     private final String memoryLibraryId;
     private final RedisCacheUtil redisCache;
     private final BookingPersistenceHook bookingPersistenceHook;
+    private final AgentRegistryHook agentRegistryHook;
 
     /** 创建预订智能体配置并加载受控的预订流程提示词。 */
     public BookingAgent(Model model, AgentSkillRepository agentSkillRepository,
@@ -85,7 +87,8 @@ public class BookingAgent {
                         ItineraryPlanReadTools itineraryPlanReadTools,
                         @Value("${corp.trip.bailian.dashscope-api}") String dashscopeApiKey,
                         @Value("${corp.trip.bailian.memory-library-id}") String memoryLibraryId,
-                        RedisCacheUtil redisCache) {
+                        RedisCacheUtil redisCache,
+                        AgentRegistryHook agentRegistryHook) {
         this.model = model;
         this.agentSkillRepository = agentSkillRepository;
         this.persistSessionHook = persistSessionHook;
@@ -108,6 +111,7 @@ public class BookingAgent {
         this.dashscopeApiKey = dashscopeApiKey;
         this.memoryLibraryId = memoryLibraryId;
         this.redisCache = redisCache;
+        this.agentRegistryHook = agentRegistryHook;
     }
 
     /** 为当前会话创建隔离的预订智能体并注入用户认证上下文。 */
@@ -154,9 +158,9 @@ public class BookingAgent {
                 .maxIters(10) // 执行轮数
                 .toolExecutionConfig(ExecutionConfig.builder().timeout(Duration.ofMinutes(30)).build())
                 .memory(new AutoContextMemory(AutoContextConfig.builder().build(), model))
-                .hooks(List.of(persistSessionHook, bookingPersistenceHook, tuniuApiKeyShellHook,
+                .hooks(List.of(agentRegistryHook, persistSessionHook, bookingPersistenceHook, tuniuApiKeyShellHook,
                         progressNotificationHook, modelUsageBillingHook, agentExecutionMonitorHook,
-                        agentTracePersistenceHook, new AutoContextHook()))
+                        agentTracePersistenceHook, new AutoContextHook(), new PendingToolRecoveryHook()))
                 .build();
     }
 
