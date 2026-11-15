@@ -1,8 +1,10 @@
 package cn.lwccxy.trip.business.chat;
 
+import cn.lwccxy.trip.business.chat.domain.form.ChatInterruptForm;
 import cn.lwccxy.trip.business.chat.domain.form.ChatResumeForm;
 import cn.lwccxy.trip.common.auth.CurrentUser;
 import cn.lwccxy.trip.common.model.ChatRequestDTO;
+import cn.lwccxy.trip.common.response.Response;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -27,4 +29,12 @@ public class ChatController {
     public SseEmitter resume(@RequestBody ChatResumeForm form) {
         return pipeline.resume(currentUser.get().getId(), form.getConversationId(), form.getToolCallId(), form.getAnswer());
     }
+
+    /** 中断当前用户指定会话中正在运行的智能体任务。 */
+    @PostMapping("/interrupt")
+    public Response<Void> interrupt(@Valid @RequestBody ChatInterruptForm form) {
+        pipeline.interrupt(currentUser.get().getId(), form.getConversationId());
+        return Response.success();
+    }
+
 }
