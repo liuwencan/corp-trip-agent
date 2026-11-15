@@ -1,6 +1,7 @@
 package cn.lwccxy.trip.agent.config;
 
 import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
+import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
 import cn.lwccxy.trip.agent.hooks.ConfirmationHook;
 import cn.lwccxy.trip.agent.hooks.LongTermMemoryRecordHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
@@ -44,6 +45,13 @@ public class CorpTripAgentHookConfig {
     @Bean
     public AgentExecutionMonitorHook agentExecutionMonitorHook() {
         return new AgentExecutionMonitorHook();
+    }
+
+    /** 创建专门持久化 Agent 链路 Span 的 Hook。 */
+    @Bean
+    public AgentTracePersistenceHook agentTracePersistenceHook(
+            cn.lwccxy.trip.business.agenttrace.service.AgentTracePersistenceService persistenceService) {
+        return new AgentTracePersistenceHook(persistenceService);
     }
 
     /** 创建审计长期记忆写入和检索行为的 Hook。 */

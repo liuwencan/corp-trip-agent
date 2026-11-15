@@ -4,6 +4,7 @@ import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
+import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.tools.AskUserTool;
@@ -54,6 +55,7 @@ public class GeneralInfoAgent {
     private final ProgressNotificationHook progressNotificationHook;
     private final ModelUsageBillingHook modelUsageBillingHook;
     private final AgentExecutionMonitorHook agentExecutionMonitorHook;
+    private final AgentTracePersistenceHook agentTracePersistenceHook;
     private final DestinationLiveTools destinationLiveTools;
     private final PolicyTools policyTools;
 
@@ -75,7 +77,8 @@ public class GeneralInfoAgent {
                             DestinationLiveTools destinationLiveTools,
                             PolicyTools policyTools,
                             ModelUsageBillingHook modelUsageBillingHook,
-                            AgentExecutionMonitorHook agentExecutionMonitorHook) {
+                            AgentExecutionMonitorHook agentExecutionMonitorHook,
+                            AgentTracePersistenceHook agentTracePersistenceHook) {
         this.dataSource = dataSource;
         this.model = model;
         this.weatherMcpClient = weatherMcpClient;
@@ -90,6 +93,7 @@ public class GeneralInfoAgent {
         this.progressNotificationHook = progressNotificationHook;
         this.modelUsageBillingHook = modelUsageBillingHook;
         this.agentExecutionMonitorHook = agentExecutionMonitorHook;
+        this.agentTracePersistenceHook = agentTracePersistenceHook;
         this.destinationLiveTools = destinationLiveTools;
         this.policyTools = policyTools;
     }
@@ -143,7 +147,7 @@ public class GeneralInfoAgent {
                 .knowledge(corptripGuidelinesKnowledge).knowledge(corptripPolicyKnowledge) // 添加 差旅政策/差旅指南 知识库d
                 .ragMode(RAGMode.AGENTIC)
                 .memory(new AutoContextMemory(autoContextConfig, model))
-                .hooks(List.of(persistSessionHook, agentExecutionMonitorHook,
+                .hooks(List.of(persistSessionHook, agentExecutionMonitorHook, agentTracePersistenceHook,
                         progressNotificationHook, modelUsageBillingHook))
                 .build();
     }

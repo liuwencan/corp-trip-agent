@@ -115,20 +115,28 @@ public class AgentExecutionMonitorHook implements Hook {
      */
     private void dispatch(HookEvent event, AgentRuntimeContext runtimeContext) {
         if (event instanceof PreCallEvent preCallEvent) {
+            // 智能体开始执行前
             handlePreCall(preCallEvent, runtimeContext);
         } else if (event instanceof PreReasoningEvent preReasoningEvent) {
+            // 每一轮推理前
             handlePreReasoning(preReasoningEvent, runtimeContext);
         } else if (event instanceof PostReasoningEvent postReasoningEvent) {
+            // 每一轮推理后
             handlePostReasoning(postReasoningEvent, runtimeContext);
         } else if (event instanceof PreActingEvent preActingEvent) {
+            // 工具调用前
             handlePreActing(preActingEvent, runtimeContext);
         } else if (event instanceof PostActingEvent postActingEvent) {
+            // 工具调用后
             handlePostActing(postActingEvent, runtimeContext);
         } else if (event instanceof PreSummaryEvent preSummaryEvent) {
+            // 记录上下文压缩开始消息
             handlePreSummary(preSummaryEvent, runtimeContext);
         } else if (event instanceof PostSummaryEvent postSummaryEvent) {
+            // 记录上下文压缩结果信息
             handlePostSummary(postSummaryEvent, runtimeContext);
         } else if (event instanceof PostCallEvent postCallEvent) {
+            // Agent调用完毕, 最终指标汇总
             handlePostCall(postCallEvent, runtimeContext);
         } else if (event instanceof ErrorEvent errorEvent) {
             handleError(errorEvent, runtimeContext);

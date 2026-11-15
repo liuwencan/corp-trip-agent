@@ -3,6 +3,7 @@ package cn.lwccxy.trip.agent;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
+import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
 import cn.lwccxy.trip.agent.hooks.ConfirmationHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
@@ -12,6 +13,7 @@ import cn.lwccxy.trip.agent.tools.AskUserTool;
 import io.agentscope.core.memory.autocontext.AutoContextConfig;
 import io.agentscope.core.memory.autocontext.AutoContextHook;
 import io.agentscope.core.memory.autocontext.AutoContextMemory;
+import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.tool.ToolExecutionContext;
@@ -32,6 +34,7 @@ import javax.sql.DataSource;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 
 /** 配置主智能体，并将差旅领域子智能体注册为可调用工具。 */
@@ -52,6 +55,7 @@ public class MasterAgent {
     private final ConfirmationHook confirmationHook;
     private final ProgressNotificationHook progressNotificationHook;
     private final AgentExecutionMonitorHook agentExecutionMonitorHook;
+    private final AgentTracePersistenceHook agentTracePersistenceHook;
     private final String masterAgentPrompt;
 
     /**
@@ -64,7 +68,8 @@ public class MasterAgent {
                        McpClientWrapper weatherMcpClient, ConfirmationHook confirmationHook,
                        ProgressNotificationHook progressNotificationHook,
                        ModelUsageBillingHook modelUsageBillingHook,
-                       AgentExecutionMonitorHook agentExecutionMonitorHook) {
+                       AgentExecutionMonitorHook agentExecutionMonitorHook,
+                       AgentTracePersistenceHook agentTracePersistenceHook) {
         this.dataSource = dataSource;
         this.model = model;
         this.applicationContext = applicationContext;
@@ -75,6 +80,7 @@ public class MasterAgent {
         this.confirmationHook = confirmationHook;
         this.progressNotificationHook = progressNotificationHook;
         this.agentExecutionMonitorHook = agentExecutionMonitorHook;
+        this.agentTracePersistenceHook = agentTracePersistenceHook;
         this.masterAgentPrompt = loadMasterAgentPrompt();
     }
 
@@ -162,9 +168,13 @@ public class MasterAgent {
                 .sysPrompt(masterAgentPrompt)
                 .toolkit(toolkit)
                 .toolExecutionContext(context)
+                .maxIters(100)
+                .toolExecutionConfig(ExecutionConfig.builder()
+                        .timeout(Duration.ofMinutes(30)).build()) // 工具执行超时配置
                 .hooks(List.of(new AutoContextHook(), confirmationHook, persistSessionHook,
                         // 全链路监控放在进度推送之前，保证统计到的是推送前的真实耗时。
-                        agentExecutionMonitorHook, progressNotificationHook, modelUsageBillingHook))
+                        agentExecutionMonitorHook, agentTracePersistenceHook,
+                        progressNotificationHook, modelUsageBillingHook))
                 .memory(new AutoContextMemory(autoContextConfig, model)) // AgentScope的六层上下文压缩机制
                 .build();
 

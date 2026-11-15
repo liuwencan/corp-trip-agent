@@ -51,6 +51,7 @@ public class BookingAgent {
     private final ProgressNotificationHook progressNotificationHook;
     private final ModelUsageBillingHook modelUsageBillingHook;
     private final AgentExecutionMonitorHook agentExecutionMonitorHook;
+    private final AgentTracePersistenceHook agentTracePersistenceHook;
     private final TripOrderReadTools tripOrderReadTools;
     private final BookingRecordReadTools bookingRecordReadTools;
     private final BookingRecordWriteTools bookingRecordWriteTools;
@@ -73,6 +74,7 @@ public class BookingAgent {
                         ProgressNotificationHook progressNotificationHook,
                         ModelUsageBillingHook modelUsageBillingHook,
                         AgentExecutionMonitorHook agentExecutionMonitorHook,
+                        AgentTracePersistenceHook agentTracePersistenceHook,
                         TripOrderReadTools tripOrderReadTools,
                         BookingRecordReadTools bookingRecordReadTools,
                         BookingRecordWriteTools bookingRecordWriteTools,
@@ -93,6 +95,7 @@ public class BookingAgent {
         this.progressNotificationHook = progressNotificationHook;
         this.modelUsageBillingHook = modelUsageBillingHook;
         this.agentExecutionMonitorHook = agentExecutionMonitorHook;
+        this.agentTracePersistenceHook = agentTracePersistenceHook;
         this.tripOrderReadTools = tripOrderReadTools;
         this.bookingRecordReadTools = bookingRecordReadTools;
         this.bookingRecordWriteTools = bookingRecordWriteTools;
@@ -152,7 +155,8 @@ public class BookingAgent {
                 .toolExecutionConfig(ExecutionConfig.builder().timeout(Duration.ofMinutes(30)).build())
                 .memory(new AutoContextMemory(AutoContextConfig.builder().build(), model))
                 .hooks(List.of(persistSessionHook, bookingPersistenceHook, tuniuApiKeyShellHook,
-                        progressNotificationHook, modelUsageBillingHook, agentExecutionMonitorHook, new AutoContextHook()))
+                        progressNotificationHook, modelUsageBillingHook, agentExecutionMonitorHook,
+                        agentTracePersistenceHook, new AutoContextHook()))
                 .build();
     }
 

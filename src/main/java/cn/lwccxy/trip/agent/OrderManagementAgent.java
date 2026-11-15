@@ -4,6 +4,7 @@ import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
+import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.tools.TripOrderReadTools;
 import cn.lwccxy.trip.agent.tools.TripOrderWriteTools;
@@ -28,6 +29,7 @@ public class OrderManagementAgent {
     private final PersistSessionHook persistSessionHook;
     private final ModelUsageBillingHook modelUsageBillingHook;
     private final AgentExecutionMonitorHook agentExecutionMonitorHook;
+    private final AgentTracePersistenceHook agentTracePersistenceHook;
     private final TripOrderReadTools tripOrderReadTools;
     private final TripOrderWriteTools tripOrderWriteTools;
     private final TripScheduleConflictTools tripScheduleConflictTools;
@@ -38,11 +40,13 @@ public class OrderManagementAgent {
                                 TripOrderWriteTools tripOrderWriteTools,
                                 TripScheduleConflictTools tripScheduleConflictTools,
                                 ModelUsageBillingHook modelUsageBillingHook,
-                                AgentExecutionMonitorHook agentExecutionMonitorHook) {
+                                AgentExecutionMonitorHook agentExecutionMonitorHook,
+                                AgentTracePersistenceHook agentTracePersistenceHook) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
         this.modelUsageBillingHook = modelUsageBillingHook;
         this.agentExecutionMonitorHook = agentExecutionMonitorHook;
+        this.agentTracePersistenceHook = agentTracePersistenceHook;
         this.tripOrderReadTools = tripOrderReadTools;
         this.tripOrderWriteTools = tripOrderWriteTools;
         this.tripScheduleConflictTools = tripScheduleConflictTools;
@@ -81,7 +85,8 @@ public class OrderManagementAgent {
                 .toolkit(toolkit)
                 .toolExecutionContext(context)
                 .memory(new AutoContextMemory(autoContextConfig, model))
-                .hooks(List.of(persistSessionHook, agentExecutionMonitorHook, modelUsageBillingHook))
+                .hooks(List.of(persistSessionHook, agentExecutionMonitorHook,
+                        agentTracePersistenceHook, modelUsageBillingHook))
                 .build();
     }
 }
