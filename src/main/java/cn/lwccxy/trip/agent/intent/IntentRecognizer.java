@@ -207,6 +207,7 @@ public class IntentRecognizer {
      */
     public IntentRecognitionResult recognize(String question, List<ConversationTurn> history,
                                                Consumer<IntentRecognitionProgress> progressListener) {
+        // ===================== L0层 多结构启发 ==========================
         // 先推送结构分析阶段，再运行不依赖模型的 L0 启发式判断。
         publishProgress(progressListener, "structure_analysis", "started", "正在分析问题结构", null, null);
         // L0 仅提供结构线索；即使发现多个子句，也继续让 L1/L2 尝试确定各自意图。
@@ -218,12 +219,14 @@ public class IntentRecognizer {
         publishProgress(progressListener, "structure_analysis", "completed",
                 "问题结构分析完成，开始识别业务意图", null, RecognitionLevel.L0);
 
+        // ============= L1层关键词匹配 ==================
         // 原问题的 L1/L2 未形成单一结果时，只执行一次改写，避免重复模型调用。
         IntentRecognitionResult firstPass = recognizeL1ThenL2(question, "原问题", "original", progressListener);
         if (firstPass != null) {
             return firstPass;
         }
 
+        // ================== 问题改写 =====================
         // 只有原问题无法形成唯一意图时，才调用轻量模型补足上下文信息。
         publishProgress(progressListener, "question_rewrite", "started", "正在结合会话上下文优化问题表述",
                 null, null);
@@ -234,6 +237,8 @@ public class IntentRecognizer {
         publishProgress(progressListener, "question_rewrite", "completed",
                 hasRewrittenQuestion ? "问题表述优化完成，继续识别" : "未生成有效改写，继续按原问题识别",
                 null, null, hasRewrittenQuestion ? rewrittenQuestion : null);
+
+        // ============= 问题改写完毕后再走一遍 L1和L2层识别 ====================
         if (hasRewrittenQuestion) {
             IntentRecognitionResult rewrittenPass = recognizeL1ThenL2(
                     rewrittenQuestion, "改写问题", "rewritten", progressListener);
@@ -246,6 +251,7 @@ public class IntentRecognizer {
             logger.info("[意图识别查询改写] 改写结果为空或与原问题相同，跳过第二轮 L1/L2");
         }
 
+        // =================== L3层大模型识别兜底 =========================
         // 原问题和改写问题均未形成确定结果时才调用 L3，保留用户原始语义作为最终判断依据。
         publishProgress(progressListener, "llm_fallback", "started", "规则和语义检索未能唯一确定，正在进行模型识别",
                 null, null);

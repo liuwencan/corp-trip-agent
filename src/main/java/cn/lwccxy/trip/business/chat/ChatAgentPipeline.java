@@ -57,7 +57,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class ChatAgentPipeline {
     private final Logger logger = LoggerFactory.getLogger(ChatAgentPipeline.class);
-    private final Long SSE_TIMEOUT = 300_000L;
+    private final Long SSE_TIMEOUT = 1800000L; // 30分钟
     private final ConversationService conversations;
     private final ConversationCoordinator coordinator;
     private final ConversationMapper conversationMapper;
@@ -345,6 +345,7 @@ public class ChatAgentPipeline {
             // 将识别器内部的阶段信息转成 SSE 事件，同时保持识别器不依赖 Web 层协议。
             IntentRecognizer.IntentRecognitionResult result = intentRecognizer.recognize(
                     question, history, progress -> sendIntentProgress(emitter, traceId, progress));
+
             long costMs = (System.nanoTime() - startNanos) / 1_000_000;
             RecognitionLevel level = result == null || result.level() == null
                     ? RecognitionLevel.NONE : result.level();

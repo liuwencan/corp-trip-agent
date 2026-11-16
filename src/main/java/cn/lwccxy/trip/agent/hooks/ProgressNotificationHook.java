@@ -48,8 +48,6 @@ public class ProgressNotificationHook implements Hook {
             "GeneralInfoAgent", "通用信息智能体",
             "ItineraryPlanningAgent", "行程规划智能体");
 
-    public static final Set<String> AGENT_SETS = Set.of("MasterAgent", "BookingAgent", "OrderManagementAgent", "GeneralInfoAgent", "ItineraryPlanningAgent");
-
     private final SseEmitterRegistry sseEmitterRegistry;
 
     /**
@@ -99,18 +97,13 @@ public class ProgressNotificationHook implements Hook {
                     return Mono.just(event);
                 }
 
-                if (AGENT_SETS.contains(actingEvent.getToolUse().getName())){
-                    // 如果当前的工具是智能体调用的话, 不是具体的工具调用直接跳过推送
-                    return Mono.just(event);
-                }
-
                 eventType = SseEventEnum.TOOL_START;
                 payload = createPayload(event, eventType);
                 applyToolCall(payload, actingEvent.getToolUse());
             } else if (event instanceof PostActingEvent actingEvent) {
                 // ============ 工具调用后 ===============
-                if (AGENT_SETS.contains(actingEvent.getToolUse().getName())){
-                    // 如果当前的工具是智能体调用的话, 不是具体的工具调用直接跳过推送
+                if (actingEvent.getToolUse() == null && actingEvent.getToolResult() == null) {
+                    // AgentScope 可能产生缺少工具关联的结束事件，不能让进度 Hook 影响主链路。
                     return Mono.just(event);
                 }
 
