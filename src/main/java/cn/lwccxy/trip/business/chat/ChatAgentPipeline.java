@@ -261,14 +261,25 @@ public class ChatAgentPipeline {
         // 2. 从Map里面去获取agent实例, 调用提供的中断方法 interrupt() 执行中断
         // Registry 内部负责查询会话当前的 Agent 并发出中断请求。
         boolean interrupt = agentRegistry.interrupt(conversationId.toString());
+
         if (interrupt) {
-            SseEmitter emitter = sseEmitterRegistry.getEmitter(conversationId.toString());
-            // 中断后通过回答增量事件提示用户，并在发送后结束当前 SSE 连接。
-            SseEmitterSender.send(emitter, SseEventEnum.DELTA,
-                    "已经成功中断Agent执行, 还有什么可以帮助到您的吗？");
-            if (emitter != null) {
-                emitter.complete();
-            }
+            // 本机命中时由当前请求线程完成通知；跨节点命中则由 Redis 监听节点调用同一收尾逻辑。
+            notifyInterrupted(conversationId.toString());
+        }
+    }
+
+    /**
+     * 向指定会话发送中断完成提示并结束对应 SSE 连接。
+     *
+     * @param sessionId 会话标识
+     */
+    public void notifyInterrupted(String sessionId) {
+        SseEmitter emitter = sseEmitterRegistry.getEmitter(sessionId);
+        // 中断后通过增量事件提示用户，并在发送后结束当前 SSE 连接。
+        SseEmitterSender.send(emitter, SseEventEnum.DELTA,
+                "已经成功中断Agent执行, 还有什么可以帮助到您的吗？");
+        if (emitter != null) {
+            emitter.complete();
         }
     }
 
