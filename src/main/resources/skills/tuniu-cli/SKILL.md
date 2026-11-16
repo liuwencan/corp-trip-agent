@@ -128,43 +128,9 @@ tuniu discovery refresh && tuniu discovery list   # 刷新服务列表
 6. **下单结果**：下单成功后展示 `orderId`/`order_id` 与支付或详情链接，提醒用户完成支付，并在途牛 App/小程序跟进订单与出行通知。
 7. **调试模式**：遇到问题时使用 `-d` 参数查看详细请求/响应。
 
-## 其他命令
+## 必须阅读（强制）
+调用途牛CLI的命令时, 有些命令会要求传入一个json格式的参数。
 
-### CLI 更新
+windows系统的统一传参json格式few-show如下(必须注意json参数的写法, 加上转义符号, 方便做解析):
+set "TUNIU_API_KEY=sk-b5d7a4613f9646b2a656a5564xxxxx" && tuniu call flight searchLowestPriceFlight -a "{\"departureCityName\":\"北京\",\"arrivalCityName\":\"上海\",\"departureDate\":\"2026-11-20\"}"
 
-```bash
-tuniu update                     # 检查并更新 CLI 到 npm latest，并刷新本机已安装的 skill
-tuniu update --check             # 仅检查是否有新版本（不安装）
-tuniu update --cli-only          # 只更新 CLI，不刷新 skill
-tuniu update --to <version>      # 更新到指定版本
-tuniu -V                         # 查看当前 CLI 版本
-```
-
-Agent 发现 CLI/Skill 过旧或能力缺失时，优先执行 `tuniu update`，不要手工卸载/清缓存再装。仅刷新 Skill 时用 `tuniu skill install`。
-
-### Skill 管理
-
-```bash
-tuniu skill install              # 安装/更新 skill（默认 ~/.agents/skills/tuniu-cli/）
-tuniu skill install --agent cursor,claude   # 指定 Agent
-tuniu skill install --agent all             # 刷新本机已安装 tuniu-cli 的全部位置
-tuniu skill install --dir <skills根目录>    # 自定义目录
-tuniu skill version              # 查看已安装 skill 版本
-```
-
-安装产物含 `SKILL.md` + `references/`；优先从开放平台下载 zip，失败则用 CLI 内置 `skill/` 目录。
-
-### 配置
-
-```bash
-tuniu config show                # 查看当前配置（退出码 107 时排查）
-tuniu config init                # 初始化配置文件
-tuniu config init -f             # 覆盖已有配置
-tuniu config set <key> <value>   # 设置配置项
-```
-
-默认配置文件：`~/.tuniu-mcp/config.json`。
-
-## Skill 版本
-
-CLI 版本须 ≥ 头部 `minCliVersion`；不足时执行 `tuniu update`。查看版本：`tuniu -V` / `tuniu skill version`。

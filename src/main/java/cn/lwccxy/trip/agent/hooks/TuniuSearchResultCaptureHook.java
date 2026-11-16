@@ -257,8 +257,28 @@ public class TuniuSearchResultCaptureHook implements Hook {
         if (start < 0 || end <= start) {
             return new JSONObject();
         }
-        JSONObject parsed = parseObject(command.substring(start, end + 1));
+        String rawJson = command.substring(start, end + 1);
+        // CLI 在 Windows 双引号参数中会把 JSON 的双引号转义为 \"，先尝试原文，再解开该层命令行转义。
+        JSONObject parsed = parseObject(rawJson);
+        if (parsed == null) {
+            parsed = parseObject(unescapeCommandJson(rawJson));
+        }
         return parsed == null ? new JSONObject() : parsed;
+    }
+
+    /** 解开命令行参数为 JSON 文本时增加的引号转义，保留 JSON 自身的其他转义序列。 */
+    private String unescapeCommandJson(String rawJson) {
+        StringBuilder unescaped = new StringBuilder(rawJson.length());
+        for (int index = 0; index < rawJson.length(); index++) {
+            char current = rawJson.charAt(index);
+            if (current == '\\' && index + 1 < rawJson.length() && rawJson.charAt(index + 1) == '"') {
+                unescaped.append('"');
+                index++;
+            } else {
+                unescaped.append(current);
+            }
+        }
+        return unescaped.toString();
     }
 
     /** 解析 JSON 对象并隔离异常。 */

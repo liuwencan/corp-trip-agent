@@ -5,8 +5,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -39,10 +37,7 @@ public class TuniuSearchCandidateStore {
      * @return Redis Key
      */
     public static String keyOf(String userId) {
-        String normalized = userId == null || userId.isBlank() ? "unknown" : userId.trim();
-        String encodedUserId = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(normalized.getBytes(StandardCharsets.UTF_8));
-        return KEY_PREFIX + encodedUserId;
+        return KEY_PREFIX + userId;
     }
 
     /**

@@ -40,7 +40,7 @@ public class CorpTripModelConfig {
         Model model =
                 DashScopeChatModel.builder()
                         .apiKey(apiKey)
-                        .modelName("qwen3.8-max-0902")
+                        .modelName("qwen4-max")
                         .stream(true) // 是否流式输出
                         .endpointType(EndpointType.MULTIMODAL)
                         .formatter(new DashScopeChatFormatter())
@@ -59,9 +59,10 @@ public class CorpTripModelConfig {
         Model model =
                 DashScopeChatModel.builder()
                         .apiKey(apiKey)
-                        .modelName("qwen3.8-max-0902")
-                        .stream(true) // 是否流式输出
+                        .modelName("qwen3.8-flash")
                         .endpointType(EndpointType.MULTIMODAL) // 使用多模态端点
+                        .enableThinking(false)
+                        .stream(false)
                         .build();
         return model;
     }
