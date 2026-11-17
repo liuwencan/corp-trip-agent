@@ -8,6 +8,7 @@ import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
 import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
 import cn.lwccxy.trip.agent.hooks.LongTermMemoryRecordHook;
+import cn.lwccxy.trip.agent.hooks.PersistPlanNoteHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.hooks.SkillContentCollapseHook;
 import cn.lwccxy.trip.agent.hooks.TuniuApiKeyShellHook;
@@ -15,6 +16,7 @@ import cn.lwccxy.trip.agent.hooks.TuniuShellCommandValidator;
 import cn.lwccxy.trip.agent.hooks.TuniuSearchResultHook;
 import cn.lwccxy.trip.agent.hooks.TuniuSearchResultCaptureHook;
 import cn.lwccxy.trip.agent.memory.CropTripLongTermMemory;
+import cn.lwccxy.trip.agent.store.plan.RedisPlanStorage;
 import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
 import cn.lwccxy.trip.agent.tools.ItineraryPlanDesignTools;
 import cn.lwccxy.trip.agent.tools.ItineraryReviewTools;
@@ -38,6 +40,7 @@ import io.agentscope.core.model.Model;
 import io.agentscope.core.plan.PlanNotebook;
 import io.agentscope.core.skill.SkillBox;
 import io.agentscope.core.skill.repository.AgentSkillRepository;
+import io.agentscope.core.state.StatePersistence;
 import io.agentscope.core.tool.ToolExecutionContext;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.ToolkitConfig;
@@ -50,6 +53,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -68,6 +72,7 @@ public class ItineraryPlanningAgent {
 
     private final Model model;
     private final PersistSessionHook persistSessionHook;
+    private final PersistPlanNoteHook persistPlanNoteHook;
     private final ProgressNotificationHook progressNotificationHook;
     private final ModelUsageBillingHook modelUsageBillingHook;
     private final AgentExecutionMonitorHook agentExecutionMonitorHook;
@@ -92,6 +97,7 @@ public class ItineraryPlanningAgent {
     private final ItineraryReviewTools itineraryReviewTools;
     private final PolicyTools policyTools;
     private final RedisCacheUtil redisCache;
+    private final StringRedisTemplate redisTemplate;
 
     /**
      * 创建行程规划智能体配置。
@@ -101,6 +107,7 @@ public class ItineraryPlanningAgent {
      * @param memoryLibraryId 百炼长期记忆库标识
      */
     public ItineraryPlanningAgent(Model model, PersistSessionHook persistSessionHook,
+                                  PersistPlanNoteHook persistPlanNoteHook,
                                   ProgressNotificationHook progressNotificationHook, McpClientWrapper weatherMcpClient,
                                   @Value("${corp.trip.weather-mcp.enabled-tools:}") List<String> enabledWeatherTools,
                                   DestinationLiveTools destinationLiveTools, AgentSkillRepository agentSkillRepository,
@@ -121,9 +128,11 @@ public class ItineraryPlanningAgent {
                                   ItineraryPlanReadTools itineraryPlanReadTools,
                                   ItineraryReviewTools itineraryReviewTools,
                                   PolicyTools policyTools,
-                                  RedisCacheUtil redisCache) {
+                                  RedisCacheUtil redisCache,
+                                  StringRedisTemplate redisTemplate) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
+        this.persistPlanNoteHook = persistPlanNoteHook;
         this.progressNotificationHook = progressNotificationHook;
         this.modelUsageBillingHook = modelUsageBillingHook;
         this.agentExecutionMonitorHook = agentExecutionMonitorHook;
@@ -152,6 +161,7 @@ public class ItineraryPlanningAgent {
         this.itineraryReviewTools = itineraryReviewTools;
         this.policyTools = policyTools;
         this.redisCache = redisCache;
+        this.redisTemplate = redisTemplate;
     }
 
     /** 为当前业务会话创建隔离的行程规划智能体。 */
@@ -186,9 +196,14 @@ public class ItineraryPlanningAgent {
         SkillBox skillBox = buildPlanningSkillBox(toolkit);
         // 长期记忆
         LongTermMemory longTermMemory = createLongTermMemory();
+
+        // ====================== 智能体Plan模式 ==========================
+        String userId = agentRuntimeContext.getUserId();
+        RedisPlanStorage redisPlanStorage = new RedisPlanStorage(redisTemplate, userId);
         // 启动Agent-Plan模式
         PlanNotebook planNotebook = PlanNotebook.builder()
                 .needUserConfirm(false) // 无需用户手动确认
+                .storage(redisPlanStorage)
                 .build();
         // 给PlanNoteBook挂载一个Hook, 做计划进度推送
         if(agentRuntimeContext.getSessionId() != null){
@@ -204,14 +219,17 @@ public class ItineraryPlanningAgent {
                 .toolkit(toolkit)
                 .skillBox(skillBox)
                 .planNotebook(planNotebook)
+                // 计划状态由 PersistPlanNoteHook 单独按会话加载和保存，避免与通用 Session Hook 重复写入。
+                .statePersistence(StatePersistence.builder().planNotebookManaged(false).build())
                 .toolExecutionContext(context)
-                .maxIters(100)
+                .maxIters(150)
                 .toolExecutionConfig(ExecutionConfig.builder()
-                        .timeout(Duration.ofMinutes(30)).build()) // 工具执行超时配置
+                        .timeout(Duration.ofMinutes(60)).build()) // 工具执行超时配置
                 .memory(new AutoContextMemory(autoContextConfig, model))
                 // 搜索结果在通知及持久化前精简，确保后续模型推理读取替换后的消息。
                 // skillContentCollapseHook 在推理前折叠历史技能正文，避免每轮重放整份 SKILL.md。
-                .hooks(List.of(agentRegistryHook, persistSessionHook, tuniuApiKeyShellHook, tuniuSearchResultHook,
+                .hooks(List.of(agentRegistryHook, persistSessionHook, persistPlanNoteHook, tuniuApiKeyShellHook,
+                        tuniuSearchResultHook,
                         tuniuSearchResultCaptureHook, skillContentCollapseHook,
                         progressNotificationHook, modelUsageBillingHook, longTermMemoryRecordHook,
                         agentExecutionMonitorHook, agentTracePersistenceHook,
