@@ -25,7 +25,7 @@ public class BookingRecordQueryForm {
     @Pattern(regexp = "FLIGHT|HOTEL|TRAIN|TICKET|CRUISE|VACATION")
     private String bizType;
     /** 按预订状态筛选。 */
-    @Pattern(regexp = "CREATED|PENDING_PAYMENT|PAID|CONFIRMED|COMPLETED|CANCELLED|REFUNDED|FAILED")
+    @Pattern(regexp = "CREATED|PENDING_PAYMENT|PAID|CONFIRMED|COMPLETED|CANCELLED|EXPIRED|REFUNDED|FAILED")
     private String status;
     /** 页码，从 1 开始。 */
     @Min(1)

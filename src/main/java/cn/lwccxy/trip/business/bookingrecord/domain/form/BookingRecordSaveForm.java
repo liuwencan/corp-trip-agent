@@ -31,7 +31,7 @@ public class BookingRecordSaveForm {
     @Size(max = 128)
     private String externalOrderNo;
     /** 系统统一预订状态。 */
-    @Pattern(regexp = "CREATED|PENDING_PAYMENT|PAID|CONFIRMED|COMPLETED|CANCELLED|REFUNDED|FAILED")
+    @Pattern(regexp = "CREATED|PENDING_PAYMENT|PAID|CONFIRMED|COMPLETED|CANCELLED|EXPIRED|REFUNDED|FAILED")
     private String status;
     /** 外部平台原始状态。 */
     @Size(max = 64)

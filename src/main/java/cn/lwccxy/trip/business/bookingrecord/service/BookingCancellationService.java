@@ -29,7 +29,7 @@ public class BookingCancellationService {
     }
 
     /**
-     * 只取消当前用户在途牛的机票或火车订单；供应商明确成功后才将本地记录设为 CANCELLED。
+     * 只取消当前用户在途牛的机票或火车订单；供应商明确成功后同步 CANCELLED，平台判定过期后同步 EXPIRED。
      *
      * @param userId 会话用户 ID，不接受模型传入的其他用户身份
      * @param bookingId 内部预订单号
@@ -57,6 +57,10 @@ public class BookingCancellationService {
             if ("CANCELLED".equals(record.getStatus())) {
                 return result(true, null, "该记录已标记为取消，本次没有重复请求途牛；供应商实际状态和退款情况请以平台查询为准。",
                         id, "CANCELLED", null, true);
+            }
+            if ("EXPIRED".equals(record.getStatus())) {
+                return result(true, null, "该预订已过期，途牛平台已自动取消，本地记录已标记为过期。",
+                        id, "EXPIRED", true, true);
             }
             if (!Set.of("CREATED", "PENDING_PAYMENT", "PAID", "CONFIRMED").contains(
                     record.getStatus() == null ? "" : record.getStatus())) {
@@ -94,6 +98,19 @@ public class BookingCancellationService {
                         id, record.getStatus(), null, false);
             }
             var provider = cancellationClient.cancel(record.getBizType(), record.getExternalOrderNo().trim(), apiKey);
+            if (provider.outcome() == TuniuBookingCancellationClient.Outcome.EXPIRED) {
+                // 途牛外层调用成功但 content[0].text 的 successCode=false 表示超时未支付，平台已自动取消订单。
+                try {
+                    Response<Void> expired = bookingRecordService.expire(owner, id);
+                    if (expired == null || !expired.isSuccess()) {
+                        return expiredLocalSyncFailed(id);
+                    }
+                } catch (Exception exception) {
+                    return expiredLocalSyncFailed(id);
+                }
+                return result(true, null, "该预订已过期，因超时未支付已由途牛平台自动取消；本地预订记录已更新为 EXPIRED。",
+                        id, "EXPIRED", true, true);
+            }
             if (provider.outcome() != TuniuBookingCancellationClient.Outcome.CONFIRMED) {
                 return result(false, provider.errorCode(), providerMessage(provider.errorCode()), id, record.getStatus(),
                         provider.outcome() == TuniuBookingCancellationClient.Outcome.REJECTED ? false : null, false);
@@ -129,11 +146,19 @@ public class BookingCancellationService {
                 bookingId, null, true, false);
     }
 
+    /** 生成平台已自动取消但本地过期状态同步失败的部分成功结果。 */
+    private Response<BookingCancellationVO> expiredLocalSyncFailed(String bookingId) {
+        return result(false, "LOCAL_SYNC_FAILED", "途牛返回订单已过期并已自动取消，但本地记录更新失败；请联系管理员同步为 EXPIRED，不要再次发起取消。",
+                bookingId, null, true, false);
+    }
+
     /** 将 CLI 技术错误转换为模型可执行的下一步提示，不透传供应商或进程原文。 */
     private String providerMessage(String errorCode) {
         return switch (errorCode == null ? "" : errorCode) {
             case "PROVIDER_AUTH_FAILED" -> "途牛凭证验证失败，请在服务商凭证设置中检查或更新当前用户的 API Key 后再操作。";
-            case "CLI_UNAVAILABLE", "CLI_CONFIGURATION_ERROR" -> "取消服务的途牛 CLI 环境或参数配置异常，请联系管理员检查；当前无法确认供应商取消成功。";
+            case "CLI_UNAVAILABLE", "CLI_CONFIGURATION_ERROR" -> "取消服务的途牛 CLI 配置异常，请管理员检查后端运行账户的 CLI 配置和活动 profile；当前无法确认供应商取消成功。";
+            case "CLI_TOOL_NOT_FOUND" -> "途牛 CLI 未找到 cancelOrder 工具，请管理员检查 CLI 版本和当前服务配置；当前无法确认供应商取消成功。";
+            case "CLI_INVALID_PARAMS" -> "途牛 CLI 未能解析取消参数 JSON，请管理员检查后端 CLI 调用参数和对应脱敏日志；本次请求未能确认供应商取消成功。";
             case "PROVIDER_CANCEL_REJECTED" -> "途牛未同意本次取消，本地记录保持原状态；请到平台核实订单是否已支付、出票或不满足取消规则。";
             default -> "途牛取消结果尚未确认，可能超时或响应不完整；本地记录保持原状态，请先查询平台实际状态，不要自动重试取消。";
         };

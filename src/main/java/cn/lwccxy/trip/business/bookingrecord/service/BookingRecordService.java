@@ -191,7 +191,7 @@ public class BookingRecordService {
                 .eq(BookingRecordEntity::getUserId, owner)
                 .eq(BookingRecordEntity::getBookingId, id)
                 .eq(BookingRecordEntity::getDeleted, 0)
-                .notIn(BookingRecordEntity::getStatus, "CANCELLED", "COMPLETED", "REFUNDED")
+                .notIn(BookingRecordEntity::getStatus, "CANCELLED", "COMPLETED", "REFUNDED", "EXPIRED")
                 .set(BookingRecordEntity::getStatus, "CANCELLED")
                 .set(BookingRecordEntity::getUpdatedAt, LocalDateTime.now()));
         if (affected == 1) {
@@ -204,6 +204,46 @@ public class BookingRecordService {
         // 未命中更新时才读取状态：隐藏其他用户记录，并让重复取消保持幂等；不修改支付或供应商状态。
         BookingRecordEntity entity = requireOwned(owner, id);
         if ("CANCELLED".equals(entity.getStatus())) {
+            return Response.success();
+        }
+        throw new BizException(BookingRecordErrorCode.INVALID_STATUS);
+    }
+
+    /**
+     * 将当前用户所属、因超时未支付而被供应商自动取消的预订标记为过期。
+     *
+     * @param userId 当前登录用户 ID
+     * @param bookingId 内部预订单号
+     * @return 本地同步结果；已经过期的记录重复同步仍视为成功
+     * @throws BizException 参数无效、记录不属于当前用户或当前状态不允许过期时抛出
+     */
+    @Transactional
+    public Response<Void> expire(String userId, String bookingId) {
+        String owner = required(userId);
+        String id = required(bookingId);
+        if (id.length() > 64) {
+            throw new BizException(BookingRecordErrorCode.INVALID_PARAMETER);
+        }
+
+        // 仅允许未完成的预订进入过期终态，避免覆盖已取消、已完成或已退款记录。
+        int affected = mapper.update(null, new LambdaUpdateWrapper<BookingRecordEntity>()
+                .eq(BookingRecordEntity::getUserId, owner)
+                .eq(BookingRecordEntity::getBookingId, id)
+                .eq(BookingRecordEntity::getDeleted, 0)
+                .notIn(BookingRecordEntity::getStatus, "CANCELLED", "COMPLETED", "REFUNDED", "EXPIRED")
+                .set(BookingRecordEntity::getStatus, "EXPIRED")
+                .set(BookingRecordEntity::getExternalStatus, "ORDER_EXPIRED")
+                .set(BookingRecordEntity::getUpdatedAt, LocalDateTime.now()));
+        if (affected == 1) {
+            return Response.success();
+        }
+        if (affected != 0) {
+            throw new IllegalStateException("标记预订过期影响行数异常。");
+        }
+
+        // 未命中更新时再次读取本人记录，保证重复同步幂等且不暴露其他用户记录。
+        BookingRecordEntity entity = requireOwned(owner, id);
+        if ("EXPIRED".equals(entity.getStatus())) {
             return Response.success();
         }
         throw new BizException(BookingRecordErrorCode.INVALID_STATUS);

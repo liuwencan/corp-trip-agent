@@ -3,6 +3,8 @@ package cn.lwccxy.trip.business.bookingrecord.integration;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -13,11 +15,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /** 使用隔离子进程执行途牛机票、火车票取消命令，并核实业务响应。 */
@@ -26,6 +30,12 @@ public class TuniuBookingCancellationClient {
 
     private static final int MAX_OUTPUT_BYTES = 1024 * 1024;
     private static final int PROCESS_TIMEOUT_SECONDS = 60;
+    private static final String WINDOWS_CLI_LAUNCHER = "const { spawnSync } = require('node:child_process'); "
+            + "const [entry, server, encoded] = process.argv.slice(1); "
+            + "const result = spawnSync(process.execPath, [entry, 'call', server, 'cancelOrder', '-a', "
+            + "Buffer.from(encoded, 'base64').toString('utf8'), '-t', '45'], "
+            + "{ stdio: 'inherit', env: process.env }); process.exit(result.status ?? 1);";
+    private static final Logger logger = LoggerFactory.getLogger(TuniuBookingCancellationClient.class);
 
     /**
      * 执行一次取消，不重试不确定结果；密钥只通过当前子进程环境变量传递。
@@ -66,10 +76,17 @@ public class TuniuBookingCancellationClient {
             }
             int exitCode = process.exitValue();
             if (exitCode != 0) {
+                String stdout = readOutputForDiagnostic(output);
+                String diagnostic = cliDiagnostic(stdout);
+                // CLI 已经输出结构化错误时只记录类型和错误码，避免把订单详情或凭证写入日志。
+                logger.warn("[BOOKING_CANCEL] 途牛 CLI 调用失败，server={}，exitCode={}，diagnostic={}",
+                        server, exitCode, diagnostic);
                 return switch (exitCode) {
                     case 104, 108, 109, 110, 111, 112 ->
                             new CancellationResult(Outcome.REJECTED, "PROVIDER_AUTH_FAILED");
-                    case 102, 103, 107 -> new CancellationResult(Outcome.REJECTED, "CLI_CONFIGURATION_ERROR");
+                    case 102 -> new CancellationResult(Outcome.REJECTED, "CLI_TOOL_NOT_FOUND");
+                    case 103 -> new CancellationResult(Outcome.REJECTED, "CLI_INVALID_PARAMS");
+                    case 107 -> new CancellationResult(Outcome.REJECTED, "CLI_CONFIGURATION_ERROR");
                     default -> new CancellationResult(Outcome.UNKNOWN, "CANCEL_RESULT_UNKNOWN");
                 };
             }
@@ -80,8 +97,11 @@ public class TuniuBookingCancellationClient {
             }
             Outcome outcome = inspectResponse(JSON.parseObject(stdout), 0);
             return new CancellationResult(outcome,
-                    outcome == Outcome.CONFIRMED ? null
-                            : outcome == Outcome.REJECTED ? "PROVIDER_CANCEL_REJECTED" : "CANCEL_RESULT_UNKNOWN");
+                    switch (outcome) {
+                        case CONFIRMED, EXPIRED -> null;
+                        case REJECTED -> "PROVIDER_CANCEL_REJECTED";
+                        case UNKNOWN -> "CANCEL_RESULT_UNKNOWN";
+                    });
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return new CancellationResult(Outcome.UNKNOWN, "CANCEL_INTERRUPTED");
@@ -97,20 +117,78 @@ public class TuniuBookingCancellationClient {
         }
     }
 
-    /** 使用参数列表传递 JSON，Windows 直接运行 Node 入口，避免 cmd 对订单号和密钥进行二次解释。 */
+    /** 使用参数列表传递参数；Windows 通过 Node 包装器转发 Base64 JSON，避免命令行破坏双引号。 */
     List<String> buildCommand(String server, String externalOrderNo) throws IOException {
         List<String> command = new ArrayList<>();
+        String argumentsJson = JSON.toJSONString(Map.of("orderId", externalOrderNo));
         if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")) {
             Path entry = findWindowsEntry();
             Path node = entry.getParent().getParent().getParent().getParent().resolve("node.exe");
             command.add(Files.isRegularFile(node) ? node.toString() : "node");
+            // Windows 进程命令行会破坏 JSON 参数中的双引号，先用 Base64 传给 Node，再由 Node 启动 CLI。
+            command.add("-e");
+            command.add(WINDOWS_CLI_LAUNCHER);
             command.add(entry.toString());
+            command.add(server);
+            command.add(Base64.getEncoder().encodeToString(argumentsJson.getBytes(StandardCharsets.UTF_8)));
         } else {
             command.add("tuniu");
+            command.addAll(List.of("call", server, "cancelOrder", "-a", argumentsJson, "-t", "45"));
         }
-        command.addAll(List.of("call", server, "cancelOrder", "-a",
-                JSON.toJSONString(Map.of("orderId", externalOrderNo)), "-t", "45"));
         return command;
+    }
+
+    /**
+     * 获取失败进程已经产生的标准输出；读取失败时返回空字符串，不能影响错误分类。
+     *
+     * @param output 异步读取任务
+     * @return CLI 标准输出，或空字符串
+     */
+    private String readOutputForDiagnostic(Future<String> output) {
+        try {
+            String value = output.get(2, TimeUnit.SECONDS);
+            return value == null ? "" : value;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return "";
+        } catch (Exception exception) {
+            return "";
+        }
+    }
+
+    /**
+     * 从 CLI 错误 JSON 中提取无敏感信息的诊断摘要，仅用于服务端日志。
+     *
+     * @param stdout CLI 标准输出
+     * @return 错误类型和 CLI 错误码摘要
+     */
+    private String cliDiagnostic(String stdout) {
+        if (stdout == null || !JSON.isValidObject(stdout)) {
+            return "NON_JSON_OUTPUT";
+        }
+        try {
+            JSONObject root = JSON.parseObject(stdout);
+            JSONObject error = root.getJSONObject("error");
+            if (error == null) {
+                return "MISSING_ERROR_OBJECT";
+            }
+            String type = error.getString("type");
+            Object code = error.get("code");
+            String message = error.getString("message");
+            String reason = "";
+            if ("InvalidParamsError".equals(type)) {
+                if ("参数必须是 JSON 对象".equals(message)) {
+                    reason = ",reason=ARGS_NOT_OBJECT";
+                } else if (message != null && message.startsWith("JSON解析失败:")) {
+                    reason = ",reason=ARGS_JSON_PARSE_FAILED";
+                }
+            }
+            return "type=" + (type == null ? "UNKNOWN" : type.replaceAll("[^A-Za-z0-9_ -]", "_"))
+                    + ",code=" + (code == null ? "UNKNOWN" : String.valueOf(code).replaceAll("[^0-9]", ""))
+                    + reason;
+        } catch (Exception exception) {
+            return "INVALID_ERROR_OUTPUT";
+        }
     }
 
     /** 按 npm 全局安装约定从 PATH 查找 CLI 脚本，不读取用户凭证配置文件。 */
@@ -148,7 +226,7 @@ public class TuniuBookingCancellationClient {
 
     /**
      * 只沿已知 MCP 包装字段解析业务结果；内层失败优先，外层 success 不能替代业务成功。
-     * 机票使用 success，火车票使用 successCode，兼容 text 为对象或字符串的响应。
+     * 过期判定严格读取 result.content[0].text 解包后的 successCode=false。
      */
     private Outcome inspectResponse(Object value, int depth) {
         if (depth > 12) {
@@ -163,6 +241,12 @@ public class TuniuBookingCancellationClient {
         if (Boolean.FALSE.equals(object.get("success")) || Boolean.FALSE.equals(object.get("successCode"))
                 || Boolean.TRUE.equals(object.get("isError"))) {
             return Outcome.REJECTED;
+        }
+        if (Boolean.TRUE.equals(object.get("success")) && object.containsKey("result")) {
+            Outcome resultContentOutcome = inspectResultContent(object.get("result"), depth + 1);
+            if (resultContentOutcome != Outcome.UNKNOWN) {
+                return resultContentOutcome;
+            }
         }
         List<Object> nested = new ArrayList<>();
         for (String field : List.of("result", "structuredContent")) {
@@ -183,6 +267,9 @@ public class TuniuBookingCancellationClient {
             boolean confirmed = false;
             for (Object child : nested) {
                 Outcome outcome = inspectResponse(child, depth + 1);
+                if (outcome == Outcome.EXPIRED) {
+                    return Outcome.EXPIRED;
+                }
                 if (outcome == Outcome.REJECTED) {
                     return Outcome.REJECTED;
                 }
@@ -192,6 +279,36 @@ public class TuniuBookingCancellationClient {
         }
         return Boolean.TRUE.equals(object.get("success")) || Boolean.TRUE.equals(object.get("successCode"))
                 ? Outcome.CONFIRMED : Outcome.UNKNOWN;
+    }
+
+    /**
+     * 从 MCP result.content[0].text 读取供应商业务结果，识别订单过期状态。
+     *
+     * @param value MCP result 包装对象
+     * @param depth 当前解析深度
+     * @return 已确认取消、订单过期或未知
+     */
+    private Outcome inspectResultContent(Object value, int depth) {
+        if (depth > 12 || !(value instanceof JSONObject result)
+                || !(result.get("content") instanceof JSONArray content) || content.isEmpty()) {
+            return Outcome.UNKNOWN;
+        }
+        Object first = content.get(0);
+        if (!(first instanceof JSONObject block) || !(block.get("text") instanceof String text)
+                || !JSON.isValidObject(text)) {
+            return Outcome.UNKNOWN;
+        }
+        JSONObject business = JSON.parseObject(text);
+        if (Boolean.FALSE.equals(business.get("successCode"))) {
+            return Outcome.EXPIRED;
+        }
+        if (Boolean.TRUE.equals(business.get("successCode"))) {
+            return Outcome.CONFIRMED;
+        }
+        if (Boolean.FALSE.equals(business.get("success"))) {
+            return Outcome.REJECTED;
+        }
+        return Outcome.UNKNOWN;
     }
 
     /** 结束仍在运行的取消进程及子进程，关闭输出流以释放阻塞的读取任务。 */
@@ -215,8 +332,8 @@ public class TuniuBookingCancellationClient {
         }
     }
 
-    /** 已确认取消、明确拒绝、结果未知三种供应商结果。 */
-    public enum Outcome { CONFIRMED, REJECTED, UNKNOWN }
+    /** 已确认取消、订单已过期、明确拒绝、结果未知四种供应商结果。 */
+    public enum Outcome { CONFIRMED, EXPIRED, REJECTED, UNKNOWN }
 
     /** 仅包含状态及内部错误码，不持有密钥或供应商原始响应。 */
     public record CancellationResult(Outcome outcome, String errorCode) {

@@ -21,7 +21,7 @@ public interface BookingRecordMapper extends BaseMapper<BookingRecordEntity> {
     @Update("UPDATE booking_record SET status='CANCELLED', external_status=#{externalStatus}, "
             + "updated_at=CURRENT_TIMESTAMP WHERE user_id=#{userId} AND platform=#{platform} "
             + "AND biz_type=#{bizType} AND external_order_no=#{externalOrderNo} AND deleted=0 "
-            + "AND status NOT IN ('CANCELLED','COMPLETED','REFUNDED')")
+            + "AND status NOT IN ('CANCELLED','COMPLETED','REFUNDED','EXPIRED')")
     int markCancelledByExternalOrder(@Param("userId") String userId,
                                      @Param("platform") String platform,
                                      @Param("bizType") String bizType,

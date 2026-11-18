@@ -119,7 +119,8 @@ public class BookingPersistenceHook implements Hook {
         JSONObject response = parseJson(extractResultText(event.getToolResult()));
         if (operation.action() == Action.CANCEL) {
             // 取消操作（取消操作Hook机制保留, 后续会用工具去进行取消操作）
-            handleCancel(runtimeContext, operation.bizType(), command, response);
+            // 废弃： 订单取消转为公交卡 BookingRecordWriteTools.cancel()
+//            handleCancel(runtimeContext, operation.bizType(), command, response);
         } else {
             // 创建操作
             handleCreate(runtimeContext, operation.bizType(), command, response);
