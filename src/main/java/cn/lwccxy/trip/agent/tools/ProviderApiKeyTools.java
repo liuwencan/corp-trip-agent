@@ -84,10 +84,13 @@ public class ProviderApiKeyTools {
     /** 查询当前用户是否配置了一个或全部第三方旅行平台的 API Key。 */
     @Tool(
             name = "query_provider_api_key_status",
-            description = "查询当前登录用户是否配置了第三方旅行平台 API Key。providerCode 可选；"
-                    + "传入 TUNIU 等平台编码时只查询该平台，不传时返回所有平台配置状态。"
-                    + "如果用户尚未配置 TUNIU，提示其前往途牛开放平台 https://open.tuniu.com/mcp/apikeys 配置并获取 API Key。"
-                    + "结果只包含是否配置和状态，不会返回 API Key。")
+            description = """
+                    查询当前登录用户是否配置了第三方旅行平台 API Key。providerCode 是可选的
+                    传入 TUNIU 等平台编码时只查询该平台，不传时返回所有平台配置状态。
+                    如果用户尚未配置 TUNIU，可以按以下两种方式提示用户去配置：
+                    1. 前往途牛开放平台 https://open.tuniu.com/mcp/apikeys 配置并获取 API Key，再在对话窗口内提供给我（Agent）保存；
+                    2. 在途灵产品的“第三方平台 API Key 配置”页面直接填写并保存。
+                    该工具返回结果只包含是否配置和状态，不会返回 API Key""")
     public String queryProviderApiKeyStatus(
             AgentRuntimeContext sessionContext,
             @ToolParam(name = "providerCode", description = "可选平台类型编码，例如 TUNIU；不传则查询全部平台", required = false)
@@ -109,12 +112,12 @@ public class ProviderApiKeyTools {
             List<ProviderApiKeyVO> statuses = records;
             if (statuses.isEmpty()) {
                 return normalizedProviderCode == null
-                        ? "查询成功：当前用户尚未配置任何第三方平台 API Key。若要使用途牛服务，请先前往途牛开放平台 https://open.tuniu.com/mcp/apikeys 配置并获取 API Key，再提供给我保存。"
+                        ? "查询成功：当前用户尚未配置任何第三方平台 API Key。若要使用途牛服务，" + tuniuConfigurationGuidance()
                         : "查询成功：当前用户尚未配置 " + normalizedProviderCode
                                 + " 平台的 API Key。"
                                 + ("TUNIU".equals(normalizedProviderCode)
-                                ? "请引导用户前往途牛开放平台 https://open.tuniu.com/mcp/apikeys 配置并获取 API Key，再提供给我保存。"
-                                : "可以请用户提供该平台的 API Key 后再调用保存工具。");
+                                ? tuniuConfigurationGuidance()
+                                : "可在途灵产品的“第三方平台 API Key 配置”页面直接填写并保存，也可以提供该平台的 API Key 后由我（Agent）保存。");
             }
             String details = statuses.stream()
                     .map(value -> value.getProviderCode() + "（" + statusText(value.getStatus()) + "）")
@@ -123,7 +126,7 @@ public class ProviderApiKeyTools {
             boolean tuniuConfigured = statuses.stream()
                     .anyMatch(value -> "TUNIU".equalsIgnoreCase(value.getProviderCode()));
             return "查询成功：已配置以下平台的 API Key：" + details + "。"
-                    + (tuniuConfigured ? "" : "当前尚未配置 TUNIU。若要使用途牛服务，请引导用户前往途牛开放平台 https://open.tuniu.com/mcp/apikeys 配置并获取 API Key，再提供给我保存。")
+                    + (tuniuConfigured ? "" : "当前尚未配置 TUNIU。若要使用途牛服务，" + tuniuConfigurationGuidance())
                     + "这里只确认配置状态，没有读取或返回密钥内容。";
         } catch (IllegalArgumentException exception) {
             return "无法查询 API Key 配置，原因：" + exception.getMessage()
@@ -219,5 +222,11 @@ public class ProviderApiKeyTools {
     private String displayProviderCode(String providerCode) {
         String normalized = normalize(providerCode);
         return normalized == null ? "指定" : normalized.toUpperCase(Locale.ROOT);
+    }
+
+    /** 返回途牛凭证缺失时的两种配置路径，便于 Agent 统一引导用户。 */
+    private String tuniuConfigurationGuidance() {
+        return "可选择：1. 前往途牛开放平台 https://open.tuniu.com/mcp/apikeys 配置并获取 API Key，再在对话窗口内提供给我（Agent）保存；"
+                + "2. 在途灵产品的“第三方平台 API Key 配置”页面直接填写并保存。";
     }
 }
