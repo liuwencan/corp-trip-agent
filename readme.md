@@ -232,8 +232,8 @@ AgentScope 对话会话和 Agent 调用轨迹使用 MySQL 持久化。RAG 知识
 - [多智能体架构](doc/multi-agent-architecture.md)
 - [意图识别架构与指标记录](doc/意图识别架构与指标记录.md)
 - [Agent SSE 进度事件协议](doc/agent-progress-timeline.md)
-- [行程方案 Redis 存储说明](doc/AgentScope计划存储说明.md)
-- [预订与取消持久化设计](doc/预订下单与取消持久化设计说明.md)
+- [行程方案 Redis 存储说明](doc/上下文工程/AgentScope计划存储说明.md)
+- [预订与取消持久化设计](doc/上下文工程/预订下单与取消持久化设计说明.md)
 - [数据库初始化脚本](sql/init.sql)
 
 ## 安全说明
