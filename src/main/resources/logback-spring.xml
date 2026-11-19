@@ -1,0 +1,41 @@
+<configuration>
+    <!-- 引用 Spring Boot 的默认日志配置，复用其级别和控制台格式基础设置。 -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
+
+    <!-- 以应用启动时的当前工作目录为项目根目录，确保日志写入根目录下的 logs 文件夹。 -->
+    <property name="APP_NAME" value="corptrip" />
+    <property name="APP_LOG_DIR" value="./logs" />
+    <property name="APP_LOG_FILE" value="${APP_LOG_DIR}/${APP_NAME}.log" />
+    <property name="APP_LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n" />
+
+    <!-- 当前日志固定写入 corptrip.log，归档文件按日期和序号滚动，避免单文件持续增大。 -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${APP_LOG_FILE}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${APP_LOG_DIR}/${APP_NAME}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxHistory>30</maxHistory>
+            <maxFileSize>10MB</maxFileSize>
+            <totalSizeCap>1GB</totalSizeCap>
+            <cleanHistoryOnStart>false</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>${APP_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 使用异步队列降低文件 I/O 对业务线程的影响，并保留全部级别的日志。 -->
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <discardingThreshold>0</discardingThreshold>
+        <queueSize>256</queueSize>
+        <appender-ref ref="FILE" />
+    </appender>
+
+    <!-- 未激活任何 profile 时也输出日志，保证默认启动方式能够同时记录控制台和文件日志。 -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="ASYNC_FILE" />
+    </root>
+</configuration>
