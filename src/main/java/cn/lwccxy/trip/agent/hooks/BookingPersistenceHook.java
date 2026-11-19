@@ -6,7 +6,7 @@ import cn.lwccxy.trip.business.bookingrecord.domain.entity.BookingRecordEntity;
 import cn.lwccxy.trip.business.bookingrecord.domain.enums.BookingType;
 import cn.lwccxy.trip.business.bookingrecord.domain.vo.BookingRecordVO;
 import cn.lwccxy.trip.business.bookingrecord.service.BookingRecordService;
-import cn.lwccxy.trip.business.tripbooking.service.TripBookingRecordService;
+import cn.lwccxy.trip.business.trip.domain.vo.TripOrderVO;
 import cn.lwccxy.trip.common.response.Response;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSON;
@@ -38,7 +38,7 @@ public class BookingPersistenceHook implements Hook {
 
     private static final Logger logger = LoggerFactory.getLogger(BookingPersistenceHook.class);
     private static final String SHELL_TOOL_NAME = "execute_shell_command";
-    private static final String PLATFORM_TUNIU = "tuniu-cli";
+    private static final String PLATFORM_TUNIU = "TUNIU";
     private static final String RUNTIME_CONTEXT_KEY = "agentRuntimeContext";
     private static final String CMD_FLIGHT_CREATE = "call flight saveOrder";
     private static final String CMD_HOTEL_CREATE = "call hotel tuniuHotelCreateOrder";
@@ -51,22 +51,14 @@ public class BookingPersistenceHook implements Hook {
             "contactmobile", "contacttourist", "tourist", "tourists", "adulttourists", "passenger",
             "passengers", "traveler", "travelers", "children", "contact");
 
-    private final TripBookingRecordService tripBookingRecordService;
     private final BookingRecordService bookingRecordService;
     private final SseEmitterRegistry emitterRegistry;
 
-    /** 创建不发送 SSE 结果的 Hook，便于单元测试和无 Web 会话场景复用。 */
-    public BookingPersistenceHook(TripBookingRecordService tripBookingRecordService,
-                                  BookingRecordService bookingRecordService) {
-        this(tripBookingRecordService, bookingRecordService, null);
-    }
 
     /** 创建完整的预订持久化 Hook。 */
     @Autowired
-    public BookingPersistenceHook(TripBookingRecordService tripBookingRecordService,
-                                  BookingRecordService bookingRecordService,
+    public BookingPersistenceHook(BookingRecordService bookingRecordService,
                                   SseEmitterRegistry emitterRegistry) {
-        this.tripBookingRecordService = tripBookingRecordService;
         this.bookingRecordService = bookingRecordService;
         this.emitterRegistry = emitterRegistry;
     }
@@ -161,6 +153,8 @@ public class BookingPersistenceHook implements Hook {
         }
         String userId = runtimeContext.getUserId().trim();
         String sessionId = runtimeContext.getSessionId();
+        String orderId = runtimeContext.getTripOrder().getId();
+
         JSONObject arguments = parseArgs(command);
 
         BookingRecordEntity bookingRecord = new BookingRecordEntity();
@@ -169,6 +163,7 @@ public class BookingPersistenceHook implements Hook {
         bookingRecord.setExternalOrderNo(externalOrderNo); // 平台侧返回的订单号
         bookingRecord.setBookingId(UUID.randomUUID().toString()); // 预定订单号（我们应用侧去生成, 后续改用雪花算法）
         bookingRecord.setBizType(BookingType.valueOf(bizType));
+        bookingRecord.setTravelOrderId(orderId); // 关联出差申请单号
         // 平台参与唯一键查询和新增参数校验，落库值必须与查询条件保持一致。
         bookingRecord.setPlatform(PLATFORM_TUNIU);
         bookingRecord.setBookedAt(LocalDateTime.now()); // 执行预定的时间
