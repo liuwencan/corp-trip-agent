@@ -95,6 +95,10 @@ public class IntentRecognizer {
             .sorted(Comparator.comparingInt(String::length).reversed())
             .toList();
 
+    /** 否定词后的顺序词属于同一动作，拆开会把“不用再订酒店”误识别为预订。 */
+    private static final Pattern NEGATION_BEFORE_CONNECTOR = Pattern.compile(
+            "(?:不要|不用|无需|不必|别|暂不|先不|不想|不需要|不能|不允许|不)\\s*$");
+
     /** 仅完整问候句可命中闲聊，避免问候语前缀掩盖后续业务诉求。 */
     private static final Pattern SMALL_TALK_PATTERN = Pattern.compile(
             "^(?:你好|您好|嗨|哈喽|早上好|早安|下午好|晚上好|晚安)(?:呀|啊|哦|呢|哟|～|~|！|!|。|…|？|\\?|\\s)*$");
@@ -109,6 +113,9 @@ public class IntentRecognizer {
 
     /** L2 两个不同意图之间的分数差阈值，差值不超过该值时交给 L3 消歧。 */
     private static final double L2_INTENT_SWING_SCORE_THRESHOLD = 0.5D;
+
+    /** L2 候选意图的最低绝对相似度分数，低于该分数的召回结果不参与后续判断。 */
+    private static final double L2_MIN_CANDIDATE_SCORE = 0.85D;
 
     /** 查询改写最多携带的历史字符数，优先保留靠近当前问题的最近上下文。 */
     private static final int MAX_REWRITE_HISTORY_CHARS = 6000;
@@ -628,20 +635,32 @@ public class IntentRecognizer {
             return new RecognitionResultL2(true, IntentType.UNKNOWN);
         }
 
+        // 先按绝对相似度过滤低质量候选，只有过滤后仍保留的候选才允许参与意图比较。
+        List<Document> qualifiedDocuments = documents.stream()
+                .filter(this::hasQualifiedL2Score)
+                .toList();
+        List<Double> retrievedScores = documents.stream().map(Document::getScore).toList();
+        List<Double> qualifiedScores = qualifiedDocuments.stream().map(Document::getScore).toList();
+        logger.info("[意图识别L2层] 候选分数过滤，召回分数={}, 最低分数={}, 保留分数={}",
+                retrievedScores, L2_MIN_CANDIDATE_SCORE, qualifiedScores);
+        if (qualifiedDocuments.isEmpty()) {
+            return new RecognitionResultL2(true, IntentType.UNKNOWN);
+        }
+
         // 解析第一个文档, 获取第一个文档对应的意图
-        Document firstDocument = documents.get(0);
+        Document firstDocument = qualifiedDocuments.get(0);
         IntentType firstIntent = resolveIntent(firstDocument);
         if (firstIntent == null) {
             return new RecognitionResultL2(true, IntentType.UNKNOWN);
         }
 
         // 只有一个有效候选时不存在意图摇摆，可以直接采用该候选意图。
-        if (documents.size() == 1) {
+        if (qualifiedDocuments.size() == 1) {
             return new RecognitionResultL2(false, firstIntent);
         }
 
         // 解析第二个文档, 获取第二个文档对应的意图
-        Document secondDocument = documents.get(1);
+        Document secondDocument = qualifiedDocuments.get(1);
         IntentType secondIntent = resolveIntent(secondDocument);
         if (secondIntent == null) {
             return new RecognitionResultL2(true, IntentType.UNKNOWN);
@@ -675,6 +694,20 @@ public class IntentRecognizer {
     }
 
     /**
+     * 判断向量检索候选是否达到 L2 的最低绝对相似度要求。
+     *
+     * @param document 待审计的向量检索文档
+     * @return 分数存在、有限且不低于最低阈值时返回 true
+     */
+    private boolean hasQualifiedL2Score(Document document) {
+        if (document == null || document.getScore() == null) {
+            return false;
+        }
+        double score = document.getScore();
+        return Double.isFinite(score) && score >= L2_MIN_CANDIDATE_SCORE;
+    }
+
+    /**
      * 从检索文档的 metadata 中解析目标意图编码。
      *
      * @param document 向量检索文档
@@ -705,10 +738,10 @@ public class IntentRecognizer {
     /**
      * L1 层识别完整问候句，并将其他用户问题按标点和连接词拆分为有序子句。
      *
-     * <p>当前方法只负责结构拆分，不执行意图正则匹配；后续可对返回的每个子句独立匹配规则。</p>
+     * <p>各子句独立执行正向正则与规则级排除检查，并保留全部有效候选供外层唯一性判断。</p>
      *
      * @param question 用户原始问题
-     * @return 去除空白和分隔符后的非空子句，保持原始出现顺序
+     * @return 按原始顺序排列的子句、有效意图规则命中与多意图线索
      */
     public L1RecognitionResult recognizeL1(String question) {
         if (question == null || question.isBlank()) {
@@ -771,14 +804,15 @@ public class IntentRecognizer {
     private List<IntentMatch> matchClauseIntents(String clause) {
         List<IntentMatch> matches = new ArrayList<>();
         for (IntentType intentType : IntentType.values()) {
-            if (intentType == IntentType.UNKNOWN || intentType.getRegexKeywords().isEmpty()) {
+            if (intentType == IntentType.UNKNOWN || intentType.getRules().isEmpty()) {
                 continue;
             }
 
-            // 一个意图可能命中多个关键词，但同一关键词只保留一次，便于后续解释和审计。
-            List<String> matchedKeywords = intentType.getRegexKeywords().stream()
-                    // 关键词按正则表达式配置，后续可支持词组、同义表达和可选字符等规则。
-                    .filter(keyword -> Pattern.compile(keyword).matcher(clause).find())
+            // 每条规则只在本子句内执行排除检查；同意图的其他规则仍可独立命中。
+            List<String> matchedKeywords = intentType.getRules().stream()
+                    .filter(rule -> rule.matches(clause))
+                    .map(IntentRule::getPositiveRegex)
+                    .distinct()
                     .sorted(Comparator.comparingInt(String::length).reversed())
                     .toList();
             if (!matchedKeywords.isEmpty()) {
@@ -823,6 +857,11 @@ public class IntentRecognizer {
      */
     private String findMiddleConnector(String question, int index, int clauseStart) {
         if (index <= clauseStart) {
+            return null;
+        }
+        // 保留否定动作的完整语义，以及“同意”这样的业务动词，避免单字连接词截断规则。
+        if (question.startsWith("同意", index)
+                || NEGATION_BEFORE_CONNECTOR.matcher(question.substring(clauseStart, index)).find()) {
             return null;
         }
         return SORTED_CONNECTOR_WORDS.stream()
