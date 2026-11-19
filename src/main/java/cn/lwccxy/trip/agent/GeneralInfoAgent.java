@@ -118,7 +118,6 @@ public class GeneralInfoAgent {
 
         // 子智能体按工具调用所需任务独立响应，主智能体负责选择和组合它们的结果。
         Toolkit toolkit = new Toolkit();
-//        toolkit.registerTool(new AskUserTool());
         // 通用信息查询与行程规划共享同一套目的地天气和最新资讯工具。
         toolkit.registerTool(destinationLiveTools);
         toolkit.registerTool(policyTools);

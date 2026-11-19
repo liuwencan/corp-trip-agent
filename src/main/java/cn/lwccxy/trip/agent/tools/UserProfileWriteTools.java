@@ -22,18 +22,18 @@ public class UserProfileWriteTools {
     }
 
     /** 保存当前用户明确提供的个人档案字段，未提供字段保持原值。 */
-    @Tool(name = "update_current_user_profile", description = "仅在用户明确要求保存或修改本人个人档案时调用。只更新用户本次明确提供的字段，未提供字段保持原值。当前用户身份由系统会话注入，不接受 userId。不得根据记忆或推测填写证件号码、手机号、姓名拼音等个人信息。")
-    public String updateCurrentUserProfile(
+    @Tool(name = "update_user_profile", description = "仅在用户明确要求保存或修改本人个人档案时调用。只更新用户本次明确提供的字段，未提供字段保持原值。当前用户身份由系统会话注入，不接受 userId。不得根据记忆或推测填写证件号码、手机号、姓名拼音等个人信息。")
+    public String updateUserProfile(
             AgentRuntimeContext context,
             @ToolParam(name = "baseCity", description = "可选，常驻城市，最多 128 字符", required = false) String baseCity,
             @ToolParam(name = "level", description = "可选，职级，例如 P5、P7，最多 16 字符", required = false) String level,
             @ToolParam(name = "namePinyin", description = "可选，酒店预订使用的姓名拼音，最多 128 字符", required = false) String namePinyin,
             @ToolParam(name = "email", description = "可选，预订联系人邮箱，最多 128 字符", required = false) String email,
             @ToolParam(name = "chineseName", description = "可选，中文姓名，最多 64 字符", required = false) String chineseName,
-            @ToolParam(name = "idType", description = "可选，证件类型编码 0 到 9", required = false) Integer idType,
+            @ToolParam(name = "idType", description = "可选，证件类型编码：0=身份证，1=护照，2=其他，3=回乡证，4=军官证，5=警官证，6=港澳通行证，7=台胞证，8=台湾通行证，9=外国人永久居留身份证", required = false) Integer idType,
             @ToolParam(name = "idNumber", description = "可选，证件号码，最多 64 字符；不得写入日志或摘要", required = false) String idNumber,
             @ToolParam(name = "phone", description = "可选，手机号，最多 32 字符；不得写入日志或摘要", required = false) String phone,
-            @ToolParam(name = "gender", description = "可选，性别代码 M 或 F", required = false) String gender) {
+            @ToolParam(name = "gender", description = "可选，性别代码：M=男，F=女", required = false) String gender) {
         String timestamp = OffsetDateTime.now().toString();
         try {
             String userId = requireUserId(context);

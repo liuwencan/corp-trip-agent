@@ -17,13 +17,7 @@ import cn.lwccxy.trip.agent.hooks.TuniuSearchResultHook;
 import cn.lwccxy.trip.agent.hooks.TuniuSearchResultCaptureHook;
 import cn.lwccxy.trip.agent.memory.CropTripLongTermMemory;
 import cn.lwccxy.trip.agent.store.plan.RedisPlanStorage;
-import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
-import cn.lwccxy.trip.agent.tools.ItineraryPlanDesignTools;
-import cn.lwccxy.trip.agent.tools.ItineraryReviewTools;
-import cn.lwccxy.trip.agent.tools.ItineraryPlanReadTools;
-import cn.lwccxy.trip.agent.tools.PolicyTools;
-import cn.lwccxy.trip.agent.tools.ProviderApiKeyTools;
-import cn.lwccxy.trip.agent.tools.TripOrderReadTools;
+import cn.lwccxy.trip.agent.tools.*;
 import cn.lwccxy.trip.common.utils.RedisCacheUtil;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.hook.PendingToolRecoveryHook;
@@ -98,6 +92,8 @@ public class ItineraryPlanningAgent {
     private final PolicyTools policyTools;
     private final RedisCacheUtil redisCache;
     private final StringRedisTemplate redisTemplate;
+    private final UserProfileReadTools userProfileReadTools;
+    private final UserProfileWriteTools userProfileWriteTools;
 
     /**
      * 创建行程规划智能体配置。
@@ -129,7 +125,9 @@ public class ItineraryPlanningAgent {
                                   ItineraryReviewTools itineraryReviewTools,
                                   PolicyTools policyTools,
                                   RedisCacheUtil redisCache,
-                                  StringRedisTemplate redisTemplate) {
+                                  StringRedisTemplate redisTemplate,
+                                  UserProfileReadTools userProfileReadTools,
+                                  UserProfileWriteTools userProfileWriteTools) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
         this.persistPlanNoteHook = persistPlanNoteHook;
@@ -162,6 +160,8 @@ public class ItineraryPlanningAgent {
         this.policyTools = policyTools;
         this.redisCache = redisCache;
         this.redisTemplate = redisTemplate;
+        this.userProfileReadTools = userProfileReadTools;
+        this.userProfileWriteTools = userProfileWriteTools;
     }
 
     /** 为当前业务会话创建隔离的行程规划智能体。 */
@@ -185,7 +185,8 @@ public class ItineraryPlanningAgent {
         toolkit.registerTool(itineraryPlanReadTools); // 读取途牛搜索结果并转换为规划候选
         toolkit.registerTool(itineraryReviewTools); // 审核已生成的代表方案
         toolkit.registerTool(policyTools); // 差旅政策查询与校验
-        toolkit.registerTool(itineraryReviewTools); // 审核已生成的代表方案
+        toolkit.registerTool(userProfileReadTools); // 用户资料读工具(预订下单需要)
+        toolkit.registerTool(userProfileWriteTools); // 用户资料写工具（用户在对话窗口内补充信息需要）
         // 只注册 YAML 白名单中的天气 MCP 工具；空名单时跳过注册，避免空名单退化为全量开放。
         if (weatherMcpClient != null && !enabledWeatherTools.isEmpty()) {
             toolkit.registration().mcpClient(weatherMcpClient).enableTools(enabledWeatherTools);

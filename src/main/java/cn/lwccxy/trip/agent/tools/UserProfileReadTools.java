@@ -21,8 +21,8 @@ public class UserProfileReadTools {
     }
 
     /** 读取当前会话用户的预订资料，不接受模型指定用户 ID。 */
-    @Tool(name = "get_current_user_profile", description = "读取当前登录用户自己的真实个人档案，用于判断途牛预订所需乘客、入住人和联系人字段是否齐全。工具自动使用当前会话身份，不要也不能传 userId。证件号码和手机号属于敏感数据，只能按本次预订必需字段使用，不得在面向用户的回复中复述。")
-    public String getCurrentUserProfile(AgentRuntimeContext context) {
+    @Tool(name = "get_user_profile", description = "读取当前登录用户自己的真实个人档案，用于判断途牛预订所需乘客、入住人和联系人字段是否齐全。工具自动使用当前会话身份，不要也不能传 userId。证件号码和手机号属于敏感数据，只能按本次预订必需字段使用，不得在面向用户的回复中复述。")
+    public String getUserProfile(AgentRuntimeContext context) {
         String timestamp = OffsetDateTime.now().toString();
         try {
             String userId = requireUserId(context);
