@@ -584,10 +584,16 @@ public class IntentRecognizer {
         }
         long inputTokens = usage.getInputTokens();
         long outputTokens = usage.getOutputTokens();
+        // 使用实际模型单价，避免切换到灵模型后仍按千问价格记录费用；未知模型不猜测单价。
+        // AgentScope 1.0.12 未暴露缓存命中数，此处按普通输入价格估算。
+        String estimatedCost = ModelPricingEnum.findByModelName(model.getModelName())
+                .map(pricing -> ModelTokenBillingUtil.calculateCost(inputTokens, outputTokens, pricing)
+                        .toPlainString())
+                .orElse("未知（未配置单价）");
         logger.info("[模型调用审计] 场景={}, 结果={}, 模型={}, 输入Token={}, 输出Token={}, 总Token={}, 模型耗时={}s, 估算费用={}元, 总耗时={}ms",
                 operation, outcome, model.getModelName(), inputTokens, outputTokens,
                 usage.getTotalTokens(), usage.getTime(),
-                ModelTokenBillingUtil.calculateCost(inputTokens, outputTokens, ModelPricingEnum.QWEN_3_8_FLASH),
+                estimatedCost,
                 elapsedMs);
     }
 

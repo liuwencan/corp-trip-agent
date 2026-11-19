@@ -40,3 +40,6 @@ node_modules/
 # 纳入个人资料接口的鉴权、事务和枚举校验回归测试。
 !/src/test/java/cn/lwccxy/trip/business/userprofile/PersonalProfileIntegrationTest.java
 !/src/test/resources/personal-profile-schema.sql
+# 纳入模型价格、缓存拆分和计费日志的回归测试。
+!/src/test/java/cn/lwccxy/trip/agent/utils/ModelTokenBillingUtilTest.java
+!/src/test/java/cn/lwccxy/trip/agent/hooks/ModelUsageBillingHookTest.java
