@@ -25,9 +25,15 @@ DEFAULT_ENDPOINT = "/business/eval/intent/recognize"
 
 
 def parse_args() -> argparse.Namespace:
-    """解析命令行参数，允许在不同环境中复用同一评测集。"""
-    parser = argparse.ArgumentParser(description="批量评测后端意图识别接口并生成 Markdown 报告")
-    parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET, help="评测数据集 JSON 路径")
+    """解析命令行参数，允许通过位置参数或选项指定评测数据集。"""
+    parser = argparse.ArgumentParser(
+        description="批量评测后端意图识别接口并生成 Markdown 报告",
+        epilog="示例：python run_intent_evaluation.py ..\\dataset\\intent-recognition-dataset-v2.json",
+    )
+    parser.add_argument("dataset_path", nargs="?", type=Path,
+                        help="评测数据集 JSON 路径；也可通过 --dataset 指定")
+    parser.add_argument("--dataset", dest="dataset_option", type=Path, default=None,
+                        help="评测数据集 JSON 路径；未指定时使用默认数据集")
     parser.add_argument("--base-url", default="http://localhost:8080", help="后端服务根地址")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT, help="意图评测接口路径")
     parser.add_argument("--token", default=None, help="Sa-Token 登录令牌；也可通过环境变量提供")
@@ -44,7 +50,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rewrites-output", type=Path, default=None,
                         help="改写问题 JSON 输出路径；默认写入数据集目录")
     parser.add_argument("--stop-on-error", action="store_true", help="首个请求或响应错误时停止")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.dataset_path is not None and args.dataset_option is not None:
+        parser.error("数据集路径只能通过位置参数或 --dataset 指定其中一种")
+    args.dataset = args.dataset_option or args.dataset_path or DEFAULT_DATASET
+    return args
 
 
 def load_dataset(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:

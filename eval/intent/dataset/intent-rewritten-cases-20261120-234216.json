@@ -1,0 +1,230 @@
+[
+  {
+    "originalQuestion": "当天来回还有补贴没？",
+    "rewrittenQuestion": "当天来回是否还有补贴？"
+  },
+  {
+    "originalQuestion": "住好一点超出的钱谁掏？",
+    "rewrittenQuestion": "差旅住宿选择高于标准的房间，超出部分的费用由谁承担？"
+  },
+  {
+    "originalQuestion": "酒店符合公司差标吗？",
+    "rewrittenQuestion": "酒店是否符合公司差旅标准？"
+  },
+  {
+    "originalQuestion": "深圳宝安机场到市区通常要多久？",
+    "rewrittenQuestion": "深圳宝安机场到市区通常需要多久？"
+  },
+  {
+    "originalQuestion": "我第一次去重庆，简单介绍下当地情况。",
+    "rewrittenQuestion": "首次前往重庆，请简要介绍当地基本情况。"
+  },
+  {
+    "originalQuestion": "明天到南京，天儿咋样？",
+    "rewrittenQuestion": "明天到达南京的天气情况如何？"
+  },
+  {
+    "originalQuestion": "厦门鼓浪屿值得去吗？",
+    "rewrittenQuestion": "厦门鼓浪屿是否值得前往旅游？"
+  },
+  {
+    "originalQuestion": "帮我查深圳天气，不要查航班。",
+    "rewrittenQuestion": "查询深圳天气，不查航班"
+  },
+  {
+    "originalQuestion": "我要申请一次当天往返的商务出行。",
+    "rewrittenQuestion": "申请一次当天往返的商务出行。"
+  },
+  {
+    "originalQuestion": "请填写并提交我下周去西安的出差申请。",
+    "rewrittenQuestion": "填写并提交下周去西安的出差申请"
+  },
+  {
+    "originalQuestion": "下周去厦门拜访客户，替我提交差旅申请。",
+    "rewrittenQuestion": "提交下周前往厦门拜访客户的差旅申请"
+  },
+  {
+    "originalQuestion": "给我提交个出差审批，目的地是宁波。",
+    "rewrittenQuestion": "提交目的地为宁波的出差审批申请"
+  },
+  {
+    "originalQuestion": "帮我创建出差申请，目的地填合肥。",
+    "rewrittenQuestion": "创建出差申请，目的地为合肥。"
+  },
+  {
+    "originalQuestion": "我想走个出差流程，去苏州两天。",
+    "rewrittenQuestion": "我想申请去苏州出差两天的差旅流程。"
+  },
+  {
+    "originalQuestion": "我还没申请过，帮我提交一份去青岛的出差申请。",
+    "rewrittenQuestion": "帮我提交一份去青岛的出差申请"
+  },
+  {
+    "originalQuestion": "申请去上海和杭州两地出差。",
+    "rewrittenQuestion": "申请去上海和杭州两地出差"
+  },
+  {
+    "originalQuestion": "上次去杭州的申请单再看一下。",
+    "rewrittenQuestion": "查看上次去杭州的申请单。"
+  },
+  {
+    "originalQuestion": "把申请目的地从南京改成苏州。",
+    "rewrittenQuestion": "修改申请目的地，将南京改为苏州"
+  },
+  {
+    "originalQuestion": "这趟行程日期改一下。",
+    "rewrittenQuestion": "修改这趟行程的日期"
+  },
+  {
+    "originalQuestion": "把这个申请撤了吧。",
+    "rewrittenQuestion": "请撤销这个申请。"
+  },
+  {
+    "originalQuestion": "行程单的回程改到周五。",
+    "rewrittenQuestion": "将行程单中的回程日期改为周五。"
+  },
+  {
+    "originalQuestion": "申请被退回了，帮我重新提交。",
+    "rewrittenQuestion": "我的申请被退回了，请帮我重新提交该申请。"
+  },
+  {
+    "originalQuestion": "这次去广州的差旅申请现在到谁审批了？",
+    "rewrittenQuestion": "查询去广州的差旅申请当前审批人"
+  },
+  {
+    "originalQuestion": "查看本月差旅审批记录和处理意见。",
+    "rewrittenQuestion": "查询本月的差旅审批记录及处理意见。"
+  },
+  {
+    "originalQuestion": "经理那边批下来没有？",
+    "rewrittenQuestion": "经理那边的审批是否已经批下来了？"
+  },
+  {
+    "originalQuestion": "只查这次申请的审批意见，不要帮我重新提交。",
+    "rewrittenQuestion": "查询本次申请的审批意见，不需要重新提交该申请。"
+  },
+  {
+    "originalQuestion": "审批已经通过了，告诉我结果就行，不用新建申请。",
+    "rewrittenQuestion": "查询已通过的审批结果，不用新建申请"
+  },
+  {
+    "originalQuestion": "下周去杭州有哪些高铁车次？",
+    "rewrittenQuestion": "查询下周前往杭州的高铁车次"
+  },
+  {
+    "originalQuestion": "查今晚从广州出发的火车票还有没有。",
+    "rewrittenQuestion": "查询今晚从广州出发的火车票余票情况"
+  },
+  {
+    "originalQuestion": "帮我搜一下去武汉的机票和票价。",
+    "rewrittenQuestion": "查询前往武汉的机票及票价信息"
+  },
+  {
+    "originalQuestion": "明早去西安的飞机还有啥选择？",
+    "rewrittenQuestion": "查询明天早晨前往西安的航班还有哪些可选方案"
+  },
+  {
+    "originalQuestion": "帮我瞅瞅去合肥的高铁票。",
+    "rewrittenQuestion": "查询前往合肥的高铁票"
+  },
+  {
+    "originalQuestion": "安排一个北京两天的客户拜访路线和日程。",
+    "rewrittenQuestion": "安排北京两天的客户拜访路线和日程"
+  },
+  {
+    "originalQuestion": "帮我制定上海出差期间的交通和住宿方案。",
+    "rewrittenQuestion": "请制定上海出差期间的交通和住宿方案。"
+  },
+  {
+    "originalQuestion": "我周二到武汉，周四见客户，帮我排一下每天的行程。",
+    "rewrittenQuestion": "请帮我安排周二到达武汉、周四会见客户期间每天的行程。"
+  },
+  {
+    "originalQuestion": "安排下南京出差期间的路线和住宿。",
+    "rewrittenQuestion": "安排南京出差期间的路线和住宿"
+  },
+  {
+    "originalQuestion": "去苏州见三个客户，怎么排路线省时间？",
+    "rewrittenQuestion": "去苏州拜访三个客户，如何安排路线最省时间？"
+  },
+  {
+    "originalQuestion": "把这几天的吃住行给我捋一版。",
+    "rewrittenQuestion": "请梳理这几天差旅中的餐饮、住宿、交通（吃住行）安排及费用明细。"
+  },
+  {
+    "originalQuestion": "想先做一个去厦门的整体行程方案，不用现在查询具体航班。",
+    "rewrittenQuestion": "请制定一份前往厦门的整体差旅行程方案，暂不查询具体航班信息。"
+  },
+  {
+    "originalQuestion": "替同事预订一张去天津的机票。",
+    "rewrittenQuestion": "替同事预订去天津的机票"
+  },
+  {
+    "originalQuestion": "上海那边的住处帮我订好。",
+    "rewrittenQuestion": "预订上海住处"
+  },
+  {
+    "originalQuestion": "退票，订单号是G12345。",
+    "rewrittenQuestion": "订单号G12345的退票"
+  },
+  {
+    "originalQuestion": "这张去南京的票不去了，帮我退掉。",
+    "rewrittenQuestion": "申请退掉不去南京的票"
+  },
+  {
+    "originalQuestion": "我的报销单被退回了，缺少什么材料？",
+    "rewrittenQuestion": "报销单被退回缺少什么材料？"
+  },
+  {
+    "originalQuestion": "报销交上去半个月了还没到账，帮我看下进度。",
+    "rewrittenQuestion": "查询已提交半个月但仍未到账的报销进度"
+  },
+  {
+    "originalQuestion": "分析一下本季度的销售数据。",
+    "rewrittenQuestion": "请分析本季度的销售数据。"
+  },
+  {
+    "originalQuestion": "帮我预约明天下午的牙医。",
+    "rewrittenQuestion": "预约明天下午的牙医。"
+  },
+  {
+    "originalQuestion": "把这段英文邮件翻译成中文。",
+    "rewrittenQuestion": "请把这封英文邮件翻译成中文。"
+  },
+  {
+    "originalQuestion": "这个事情你觉得应该怎么处理？",
+    "rewrittenQuestion": "这个事情应该怎么处理？"
+  },
+  {
+    "originalQuestion": "下周帮我弄一下那个安排。",
+    "rewrittenQuestion": "请帮我处理下周的相关安排。"
+  },
+  {
+    "originalQuestion": "帮我搜索杭州评价最高的餐厅。",
+    "rewrittenQuestion": "搜索杭州评价最高的餐厅"
+  },
+  {
+    "originalQuestion": "帮我把文件发给部门经理。",
+    "rewrittenQuestion": "请将文件发送给部门经理。"
+  },
+  {
+    "originalQuestion": "那个啥，帮我处理一下。",
+    "rewrittenQuestion": "帮我处理一下。"
+  },
+  {
+    "originalQuestion": "公司无线网络密码是什么？",
+    "rewrittenQuestion": "查询公司无线网络密码"
+  },
+  {
+    "originalQuestion": "申请去广州出差，等审批通过后帮我订机票。",
+    "rewrittenQuestion": "申请去广州出差，审批通过后订机票"
+  },
+  {
+    "originalQuestion": "查申请审批进度，审批通过后再规划后续行程。",
+    "rewrittenQuestion": "查询申请审批进度，审批通过后再规划后续行程。"
+  },
+  {
+    "originalQuestion": "帮我安排北京出差的交通和住宿，再把酒店预订下来。",
+    "rewrittenQuestion": "安排北京出差的交通和住宿并预订酒店"
+  }
+]

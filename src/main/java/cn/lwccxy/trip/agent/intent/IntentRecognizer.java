@@ -29,6 +29,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.Objects;
@@ -110,6 +111,34 @@ public class IntentRecognizer {
             .stream()
             .sorted(Comparator.comparingInt(String::length).reversed())
             .toList();
+
+    /** 前句有明确查询动作时，后句可省略动词并列举另一个差旅资源。 */
+    private static final Pattern EXPLICIT_QUERY = Pattern.compile("查|搜索|搜|找|看看|看下|对比|比较");
+    private static final Pattern RESOURCE_QUERY_OBJECT = Pattern.compile(
+            "^(?:(?:从|去|到).{1,16}?)?(?:航班|机票|飞机票|高铁(?:车次|票)?|动车(?:车次|票)?|"
+                    + "火车(?:车次|票)?|车次|车票|酒店|宾馆|客房|门票)$");
+    /** 明确的非差旅创作请求不需要调用模型即可归入 UNKNOWN。 */
+    private static final Pattern OUT_OF_SCOPE_CREATION = Pattern.compile(
+            ".*(?:写|创作|作).{0,16}(?:诗|歌词|小说|散文|故事).*");
+    private static final Pattern TRAVEL_CREATION_CONTEXT = Pattern.compile(
+            "出差|差旅|旅行|旅游|行程|路线|航班|机票|车票|酒店|住宿");
+    /** 明确被否定的动作不是用户要求执行的意图，不应阻断同句中的其他正向请求。 */
+    private static final Pattern NEGATED_REQUEST_ACTION = Pattern.compile(
+            ".*(?:不要|不用|无需|不必|别|暂不|先不|不想|不需要|不能).{0,12}"
+                    + "(?:预订|订购|订|购买|买|下单|取消|撤销|退订|退票|退掉|修改|变更|删除|"
+                    + "规划|安排|查询|搜索|审批|提交|申请).*");
+
+    /** 省略商品名称的预订指令，仅在前句查到了可预订资源的语境下使用。 */
+    private static final String REFERENCED_BOOKING_ACTION =
+            "(?:帮我|替我|给我|直接)?(?:"
+                    + "把(?:合适的|满意的|中意的|这|那)?(?:[一两二三四五六七八九十0-9]+)?(?:班|张|间|家)"
+                    + "(?:订下来|买下来|订好|买好|订上|买了|订了|下单)"
+                    + "|(?:预订|订购|购买|订|买)(?:[一两二三四五六七八九十0-9]+)(?:班|张|间|家))";
+    private static final Pattern CONDITIONAL_BOOKING = Pattern.compile(
+            "^(?:(?:如果|要是)?(?:合适|满意|中意)(?:的话)?|能订)就(?:"
+                    + REFERENCED_BOOKING_ACTION + "|(?:帮我|替我|给我|直接)?(?:订|买|下单))$");
+    private static final Pattern REFERENCED_BOOKING = Pattern.compile(
+            "^(?:再|然后(?:再)?|接着(?:再)?)?" + REFERENCED_BOOKING_ACTION + "$");
 
     /** L2 两个不同意图之间的分数差阈值，差值不超过该值时交给 L3 消歧。 */
     private static final double L2_INTENT_SWING_SCORE_THRESHOLD = 0.5D;
@@ -226,7 +255,7 @@ public class IntentRecognizer {
         publishProgress(progressListener, "structure_analysis", "completed",
                 "问题结构分析完成，开始识别业务意图", null, RecognitionLevel.L0);
 
-        // ============= L1层关键词匹配 ==================
+        // ============= L1 -> L2层意图识别编排 ==================
         // 原问题的 L1/L2 未形成单一结果时，只执行一次改写，避免重复模型调用。
         IntentRecognitionResult firstPass = recognizeL1ThenL2(question, "原问题", "original", progressListener);
         if (firstPass != null) {
@@ -281,33 +310,45 @@ public class IntentRecognizer {
      */
     private IntentRecognitionResult recognizeL1ThenL2(String question, String passName, String passCode,
                                                        Consumer<IntentRecognitionProgress> progressListener) {
-        // 规则匹配和语义检索分开报告，使前端能准确呈现当前识别层级。
+        // === 意图识别进度推送 ===
         publishProgress(progressListener, "rule_matching", "started", "正在通过规则识别" + passName,
                 passCode, RecognitionLevel.L1);
+
+        // =========== L1层关键词匹配 ===============
         long startNanos = System.nanoTime();
         L1RecognitionResult l1 = recognizeL1(question);
         long costMs = (System.nanoTime() - startNanos) / 1_000_000;
 
-        // L1 仅在所有子句总共对应一个业务意图且不存在单句多意图时直接命中。
+        // 按请求顺序去重。只有每个子句都能独立确定意图时，才直接返回多个意图。
         List<IntentType> matchedIntents = l1.clauses().stream()
                 .flatMap(clause -> clause.intentMatches().stream())
                 .map(IntentMatch::intentType)
                 .distinct()
                 .toList();
-        boolean l1Ambiguous = l1.hasMultiIntentClause() || matchedIntents.size() > 1;
-        logger.info("[意图识别L1层] 轮次={}, 子句数={}, 候选意图={}, 多意图={}, 耗时={}ms",
-                passName, l1.clauses().size(), matchedIntents, l1Ambiguous, costMs);
-        if (!l1Ambiguous && matchedIntents.size() == 1) {
+        List<ClauseRecognition> actionableClauses = l1.clauses().stream()
+                .filter(clause -> !SMALL_TALK_PATTERN.matcher(clause.clause()).matches()
+                        && !(clause.intentMatches().isEmpty()
+                        && NEGATED_REQUEST_ACTION.matcher(clause.clause()).matches()))
+                .toList();
+        boolean resolved = !matchedIntents.isEmpty() && !l1.hasMultiIntentClause()
+                && actionableClauses.stream().allMatch(clause -> clause.intentMatches().size() == 1);
+        logger.info("[意图识别L1层] 轮次={}, 子句数={}, 候选意图={}, 已确定={}, 耗时={}ms",
+                passName, l1.clauses().size(), matchedIntents, resolved, costMs);
+        if (resolved) {
             publishProgress(progressListener, "rule_matching", "completed", passName + "已通过规则匹配确定意图",
                     passCode, RecognitionLevel.L1);
-            return new RecognitionResultL1(false, matchedIntents.get(0));
+            return new RecognitionResultL1(matchedIntents.stream()
+                    .map(intent -> new IntentRecognitionIntent(intent, intent.getTargetAgent()))
+                    .toList());
         }
         publishProgress(progressListener, "rule_matching", "completed", "规则匹配未能唯一确定，继续语义检索",
                 passCode, RecognitionLevel.L1);
 
-        // L1 存在多意图线索时仍让 L2 尝试语义消歧；只有 L2 也不能确定才进入改写或 L3。
+        // 规则发生冲突或线索不足时，继续让 L2 尝试确定意图。
         publishProgress(progressListener, "semantic_retrieval", "started", "正在通过语义检索进一步判断",
                 passCode, RecognitionLevel.L2);
+
+        // ================ L2层知识库检索 ================
         startNanos = System.nanoTime();
         RecognitionResultL2 l2 = recognizeL2(question);
         costMs = (System.nanoTime() - startNanos) / 1_000_000;
@@ -616,11 +657,10 @@ public class IntentRecognizer {
     }
 
     /**
-     * 执行 L2 向量检索，并根据候选意图及分数决定是否可以直接返回。
+     * 按子句执行 L2 向量检索，并汇总所有子句的唯一意图。
      *
-     * <p>检索不到候选、候选缺少有效意图元数据，或两个不同意图的分数差不超过阈值时，
-     * 均标记为未确定，由总流程执行查询改写后重试，再交给 L3 大模型。两个候选意图相同则直接采用该意图；意图不同且分差超过阈值时，
-     * 采用分数更高的候选意图。</p>
+     * <p>每个子句都必须先独立通过绝对分数和候选分差判断；任一子句没有可接受的唯一意图，
+     * 或所有子句最终得到多个不同意图时，都交给上层改写或 L3 模型继续处理。</p>
      *
      * @param question 用户原始问题
      * @return L2 确定的意图，或标记为需要继续处理的结果
@@ -630,15 +670,45 @@ public class IntentRecognizer {
             return new RecognitionResultL2(true, IntentType.UNKNOWN);
         }
 
+        // L2 与 L1 使用同一套分句规则，确保语义检索的边界与规则识别保持一致。
+        List<String> clauses = splitQuestionClauses(question);
+        if (clauses.isEmpty()) {
+            return new RecognitionResultL2(true, IntentType.UNKNOWN);
+        }
+
+        Set<IntentType> matchedIntents = new LinkedHashSet<>();
+        for (String clause : clauses) {
+            // 每个子句单独检索；单个子句无法得到唯一意图时，整体立即放行到下一层。
+            IntentType clauseIntent = recognizeL2Clause(clause);
+            if (clauseIntent == null) {
+                return new RecognitionResultL2(true, IntentType.UNKNOWN);
+            }
+            matchedIntents.add(clauseIntent);
+        }
+
+        // 多个子句命中不同业务意图，L2 不负责拆分后的多意图路由，交给后续识别层处理。
+        if (matchedIntents.size() != 1) {
+            return new RecognitionResultL2(true, IntentType.UNKNOWN);
+        }
+        return new RecognitionResultL2(false, matchedIntents.iterator().next());
+    }
+
+    /**
+     * 对单个子句执行一次 L2 检索和候选分数判定。
+     *
+     * @param clause 当前待检索子句
+     * @return 子句唯一确定的意图；无法确定时返回 null
+     */
+    private IntentType recognizeL2Clause(String clause) {
         // 限制最多返回两个候选，保证分数比较只围绕最相关的两个语句进行。
         RetrieveConfig retrieveConfig = RetrieveConfig.builder()
                 .limit(2)
                 .build();
 
-        // 阻塞等待响应式检索结果；当前识别流程需要在返回前完成候选意图决策。
-        List<Document> documents = intentKnowledge.retrieve(question, retrieveConfig).block();
+        // 阻塞等待响应式检索结果；当前识别流程需要在返回前完成当前子句的意图决策。
+        List<Document> documents = intentKnowledge.retrieve(clause, retrieveConfig).block();
         if (documents == null || documents.isEmpty()) {
-            return new RecognitionResultL2(true, IntentType.UNKNOWN);
+            return null;
         }
 
         // 先按绝对相似度过滤低质量候选，只有过滤后仍保留的候选才允许参与意图比较。
@@ -647,56 +717,49 @@ public class IntentRecognizer {
                 .toList();
         List<Double> retrievedScores = documents.stream().map(Document::getScore).toList();
         List<Double> qualifiedScores = qualifiedDocuments.stream().map(Document::getScore).toList();
-        logger.info("[意图识别L2层] 候选分数过滤，召回分数={}, 最低分数={}, 保留分数={}",
+        // 日志只记录分数摘要，不输出用户子句原文，避免把业务输入写入运行日志。
+        logger.info("[意图识别L2层] 子句候选分数过滤，召回分数={}, 最低分数={}, 保留分数={}",
                 retrievedScores, L2_MIN_CANDIDATE_SCORE, qualifiedScores);
         if (qualifiedDocuments.isEmpty()) {
-            return new RecognitionResultL2(true, IntentType.UNKNOWN);
+            return null;
         }
 
-        // 解析第一个文档, 获取第一个文档对应的意图
+        // 解析第一个有效文档，获取其所属意图。
         Document firstDocument = qualifiedDocuments.get(0);
         IntentType firstIntent = resolveIntent(firstDocument);
         if (firstIntent == null) {
-            return new RecognitionResultL2(true, IntentType.UNKNOWN);
+            return null;
         }
 
         // 只有一个有效候选时不存在意图摇摆，可以直接采用该候选意图。
         if (qualifiedDocuments.size() == 1) {
-            return new RecognitionResultL2(false, firstIntent);
+            return firstIntent;
         }
 
-        // 解析第二个文档, 获取第二个文档对应的意图
+        // 解析第二个有效文档；两个候选属于同一意图时无需比较分数差。
         Document secondDocument = qualifiedDocuments.get(1);
         IntentType secondIntent = resolveIntent(secondDocument);
         if (secondIntent == null) {
-            return new RecognitionResultL2(true, IntentType.UNKNOWN);
+            return null;
         }
-
-        // 两个候选落在同一意图下时，分数差异不影响最终意图判断。
         if (firstIntent == secondIntent) {
-            return new RecognitionResultL2(false, firstIntent);
+            return firstIntent;
         }
 
-        // 比较第一个和第二个文档的分数差距, 检查是否存在意图摇摆情况
+        // 不同意图且分数接近时，当前子句无法唯一消歧，交给下一层继续判断。
         Double firstScore = firstDocument.getScore();
         Double secondScore = secondDocument.getScore();
         if (firstScore == null || secondScore == null
                 || !Double.isFinite(firstScore) || !Double.isFinite(secondScore)) {
-            return new RecognitionResultL2(true, IntentType.UNKNOWN);
+            return null;
         }
-
-        // 不同意图且分数接近表示, 相差不超过0.5, 代表语义摇摆，保守交给大模型进行意图识别
         double scoreDifference = Math.abs(firstScore - secondScore);
         if (scoreDifference <= L2_INTENT_SWING_SCORE_THRESHOLD) {
-            return new RecognitionResultL2(true, IntentType.UNKNOWN);
+            return null;
         }
 
-        // 分差足够大时选择得分更高的候选，而不是依赖检索结果的列表顺序。
-        if(firstScore > secondScore){
-            return new RecognitionResultL2(false, firstIntent);
-        }
-
-        return new RecognitionResultL2(false, secondIntent);
+        // 分差超过阈值时采用分数更高的候选意图，当前子句通过 L2 判定。
+        return firstScore > secondScore ? firstIntent : secondIntent;
     }
 
     /**
@@ -755,7 +818,6 @@ public class IntentRecognizer {
         }
 
         // ================== 1. 先按标点符号、连接词进行子句拆分 =============
-        // 逐字符扫描，标点始终可以拆分，连接词只有出现在当前子句已有内容之后才作为分隔符
         String normalizedQuestion = question.trim();
         // 闲聊规则检查完整输入；只要问候后还有实质内容，就继续按常规 L1 业务规则识别。
         if (SMALL_TALK_PATTERN.matcher(normalizedQuestion).matches()) {
@@ -765,6 +827,58 @@ public class IntentRecognizer {
             return new L1RecognitionResult(false, List.of(greetingClause), false, false);
         }
 
+        List<String> clauses = splitQuestionClauses(normalizedQuestion);
+
+        // 2. 各子句先独立匹配，缺少动词或对象时才使用紧邻的上一子句补全。
+        List<ClauseRecognition> clauseRecognitions = new ArrayList<>();
+        for (int clauseIndex = 0; clauseIndex < clauses.size(); clauseIndex++) {
+            String clause = clauses.get(clauseIndex);
+            List<IntentMatch> matches = matchClauseIntents(clause);
+            if (matches.isEmpty() && !clauseRecognitions.isEmpty()) {
+                ClauseRecognition previous = clauseRecognitions.getLast();
+                IntentType previousIntent = previous.intentMatches().size() == 1
+                        ? previous.intentMatches().getFirst().intentType() : IntentType.UNKNOWN;
+                boolean previousIsResourceQuery = previousIntent == IntentType.TRAVEL_RESOURCE_QUERY;
+                if (previousIsResourceQuery && CONDITIONAL_BOOKING.matcher(clause).matches()) {
+                    // “合适就订”把搜索作为代订的条件和步骤，两部分共用一个预订意图。
+                    clauseRecognitions.removeLast();
+                    clauseRecognitions.add(new ClauseRecognition(previous.index(), previous.clause() + "，" + clause,
+                            List.of(new IntentMatch(IntentType.BOOK_TRAVEL, List.of(CONDITIONAL_BOOKING.pattern())))));
+                    continue;
+                }
+                if (previousIsResourceQuery && REFERENCED_BOOKING.matcher(clause).matches()) {
+                    // “再把那一班订下来”是另一个请求，保留前句的查询结果和请求顺序。
+                    matches = List.of(new IntentMatch(IntentType.BOOK_TRAVEL, List.of(REFERENCED_BOOKING.pattern())));
+                } else if ((previousIsResourceQuery || previousIntent == IntentType.TRAVEL_INFO_QUERY)
+                        && EXPLICIT_QUERY.matcher(previous.clause()).find()
+                        && RESOURCE_QUERY_OBJECT.matcher(clause).matches()) {
+                    matches = List.of(new IntentMatch(IntentType.TRAVEL_RESOURCE_QUERY,
+                            List.of(RESOURCE_QUERY_OBJECT.pattern())));
+                }
+            }
+            clauseRecognitions.add(new ClauseRecognition(clauseIndex, clause, matches));
+        }
+        return new L1RecognitionResult(
+                clauseRecognitions.size() > 1
+                        || clauseRecognitions.stream().anyMatch(result -> result.intentMatches().size() > 1),
+                clauseRecognitions,
+                clauseRecognitions.size() > 1,
+                clauseRecognitions.stream().anyMatch(result -> result.intentMatches().size() > 1));
+    }
+
+    /**
+     * 按标点和中间连接词拆分问题，并清理子句前的承接词。
+     *
+     * @param question 待拆分的问题
+     * @return 按原始顺序排列的非空子句
+     */
+    private List<String> splitQuestionClauses(String question) {
+        if (question == null || question.isBlank()) {
+            return List.of();
+        }
+
+        // 逐字符扫描，标点始终可以拆分，连接词只有出现在当前子句已有内容之后才作为分隔符。
+        String normalizedQuestion = question.trim();
         List<String> clauses = new ArrayList<>();
         int clauseStart = 0;
         int index = 0;
@@ -786,19 +900,7 @@ public class IntentRecognizer {
             index++;
         }
         appendClause(clauses, normalizedQuestion.substring(clauseStart));
-
-        // 2. 针对每个子句独立匹配所有意图，保留同一子句的多意图命中关系。
-        List<ClauseRecognition> clauseRecognitions = new ArrayList<>();
-        for (int clauseIndex = 0; clauseIndex < clauses.size(); clauseIndex++) {
-            String clause = clauses.get(clauseIndex);
-            clauseRecognitions.add(new ClauseRecognition(clauseIndex, clause, matchClauseIntents(clause)));
-        }
-        return new L1RecognitionResult(
-                clauseRecognitions.size() > 1
-                        || clauseRecognitions.stream().anyMatch(result -> result.intentMatches().size() > 1),
-                clauseRecognitions,
-                clauseRecognitions.size() > 1,
-                clauseRecognitions.stream().anyMatch(result -> result.intentMatches().size() > 1));
+        return List.copyOf(clauses);
     }
 
     /**
@@ -824,6 +926,11 @@ public class IntentRecognizer {
             if (!matchedKeywords.isEmpty()) {
                 matches.add(new IntentMatch(intentType, matchedKeywords));
             }
+        }
+        if (matches.isEmpty() && OUT_OF_SCOPE_CREATION.matcher(clause).matches()
+                && !TRAVEL_CREATION_CONTEXT.matcher(clause).find()) {
+            // 明确的范围外创作内容可以稳定判为 UNKNOWN，避免为非差旅问题等待模型超时。
+            matches.add(new IntentMatch(IntentType.UNKNOWN, List.of(OUT_OF_SCOPE_CREATION.pattern())));
         }
         return List.copyOf(matches);
     }
@@ -971,12 +1078,28 @@ public class IntentRecognizer {
     }
 
     /**
-     * 意图识别结果。
+     * L1 规则确定的意图识别结果。
      *
-     * @param multiIntent 是否多意图
-     * @param intentType 意图
+     * @param intents 按请求出现顺序去重后的非空意图列表
      */
-    public record RecognitionResultL1(boolean multiIntent, IntentType intentType) implements IntentRecognitionResult {
+    public record RecognitionResultL1(List<IntentRecognitionIntent> intents) implements IntentRecognitionResult {
+
+        /** 保存不可变的意图列表，供聊天路由和评测接口读取。 */
+        public RecognitionResultL1 {
+            intents = List.copyOf(intents);
+        }
+
+        /** 返回按请求顺序排列的第一个意图，兼容主意图读取方式。 */
+        @Override
+        public IntentType intentType() {
+            return intents.getFirst().originalIntent();
+        }
+
+        /** 根据实际返回的意图数判断是否为多意图。 */
+        @Override
+        public boolean multiIntent() {
+            return intents.size() > 1;
+        }
 
         /**
          * 获取本次规则匹配所在层级。
@@ -1063,7 +1186,7 @@ public class IntentRecognizer {
         /**
          * 获取当前识别出的业务意图。
          *
-         * @return 多意图或未识别时为 UNKNOWN
+         * @return 第一个业务意图，未识别时为 UNKNOWN
          */
         IntentType intentType();
 
