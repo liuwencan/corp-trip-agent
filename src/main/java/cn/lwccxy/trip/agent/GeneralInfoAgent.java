@@ -110,7 +110,7 @@ public class GeneralInfoAgent {
     @Scope("prototype")
     public ReActAgent generalInfoAgent() {
         AgentRuntimeContext agentRuntimeContext = AgentRuntimeContextHolder.get();
-        logger.info("[GeneralInfoAgent]正在构建中, userId: {}, sessionId: {}", agentRuntimeContext.getUserId(), agentRuntimeContext.getSessionId());
+        logger.info("[GeneralInfoAgent] 通用信息智能体正在构建中, userId: {}, sessionId: {}", agentRuntimeContext.getUserId(), agentRuntimeContext.getSessionId());
 
         ToolExecutionContext context = ToolExecutionContext.builder()
                 .register(agentRuntimeContext)

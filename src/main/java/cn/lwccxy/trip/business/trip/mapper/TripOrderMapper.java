@@ -40,6 +40,11 @@ public interface TripOrderMapper extends BaseMapper<TripOrderEntity> {
     @Select("SELECT * FROM trip_order WHERE id=#{id} AND user_id=#{userId} FOR UPDATE")
     TripOrderEntity lockOwned(@Param("userId") String userId, @Param("id") String id);
 
+    /** 仅将当前用户已审批的申请单更新为已取消。 */
+    @Update("UPDATE trip_order SET status='CANCELLED', updated_at=CURRENT_TIMESTAMP "
+            + "WHERE id=#{id} AND user_id=#{userId} AND status='APPROVED'")
+    int cancelApprovedOwned(@Param("userId") String userId, @Param("id") String id);
+
     /** 分页查询当前用户所属的申请单。 */
     @Select("""
             <script>

@@ -16,12 +16,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    /** 将业务错误映射为统一响应及对应状态码，资料重复创建按资源冲突返回。 */
     @ExceptionHandler(BizException.class)
     public ResponseEntity<Response<Void>> business(BizException ex) {
+        // 根据业务语义区分认证、权限、资源缺失和重复操作，供前端选择恢复方式。
         int status = switch (ex.getErrorCode()) {
             case "AUTH_NOT_LOGIN", "AUTH_INVALID_CREDENTIALS" -> 401;
             case "AUTH_FORBIDDEN", "PASSWORD_CHANGE_REQUIRED" -> 403;
-            case "USER_ALREADY_EXISTS", "CONVERSATION_BUSY", "CONVERSATION_STATE_INVALID" -> 409;
+            case "USER_ALREADY_EXISTS", "PROFILE_ALREADY_EXISTS", "CONVERSATION_BUSY", "CONVERSATION_STATE_INVALID" -> 409;
             case "USER_NOT_FOUND", "RESOURCE_NOT_FOUND" -> 404;
             case "AGENT_FAILED" -> 502;
             default -> 400;

@@ -169,12 +169,21 @@ public class ItineraryPlanningAgent {
     @Scope("prototype")
     public ReActAgent itineraryPlanningAgent() {
         AgentRuntimeContext agentRuntimeContext = AgentRuntimeContextHolder.get();
+        logger.info("[ItineraryPlanningAgent] 行程规划智能体正在构建中, userId: {}, sessionId: {}", agentRuntimeContext.getUserId(), agentRuntimeContext.getSessionId());
 
         // 绑定本次会话上下文，使智能体 Hook 按当前用户和会话处理进度及持久化。
         ToolExecutionContext context = ToolExecutionContext.builder()
                 .register(agentRuntimeContext)
                 .build();
-        AutoContextConfig autoContextConfig = AutoContextConfig.builder().build();
+        AutoContextConfig autoContextConfig = AutoContextConfig.builder()
+                .largePayloadThreshold(4096) // 大消息阈值设定为4096个字符
+                .lastKeep(10) // 保护区
+                .msgThreshold(50) // 当上下文的消息列表数量超过50条
+                .maxToken(150000) // 压缩触发阈值 = maxToken * tokenRatio  （ps：maxToken通常配置为使用模型的上下文窗口大小）
+                .tokenRatio(0.75)
+                .minConsecutiveToolMessages(6) // 用于L1级压缩: 寻找工具组区间内连续调用工具次数超过6个，才对这个区间调用LLM总结摘要
+                .currentRoundCompressionRatio(0.5) // 针对L6级压缩: 决定利用LLM摘要后的结果占没摘要前的原文的 x%, 配置越小的话, 压缩后损失的信息会越多
+                .build();
 
         Toolkit toolkit = new Toolkit();
         // 提供wttr.in短期天气和NewsData.io目的地资讯查询，补足规划所需的实时参考信息。
@@ -197,7 +206,6 @@ public class ItineraryPlanningAgent {
         SkillBox skillBox = buildPlanningSkillBox(toolkit);
         // 长期记忆
         LongTermMemory longTermMemory = createLongTermMemory();
-
         // ====================== 智能体Plan模式 ==========================
         String userId = agentRuntimeContext.getUserId();
         RedisPlanStorage redisPlanStorage = new RedisPlanStorage(redisTemplate, userId);

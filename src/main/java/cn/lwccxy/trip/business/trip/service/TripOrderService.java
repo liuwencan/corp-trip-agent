@@ -6,6 +6,7 @@ import cn.lwccxy.trip.business.trip.domain.form.TripOrderQueryForm;
 import cn.lwccxy.trip.business.trip.domain.form.TripOrderSaveForm;
 import cn.lwccxy.trip.business.trip.domain.vo.TripOrderVO;
 import cn.lwccxy.trip.business.trip.domain.vo.TripApprovalRecordVO;
+import cn.lwccxy.trip.business.bookingrecord.service.BookingRecordService;
 import cn.lwccxy.trip.business.trip.enums.TripErrorCode;
 import cn.lwccxy.trip.business.trip.enums.TripOrderStatus;
 import cn.lwccxy.trip.business.trip.mapper.TripOrderMapper;
@@ -29,11 +30,14 @@ public class TripOrderService {
 
     private final TripOrderMapper mapper;
     private final TripApprovalRecordMapper approvalRecordMapper;
+    private final BookingRecordService bookingRecordService;
 
     /** 创建出差申请单服务。 */
-    public TripOrderService(TripOrderMapper mapper, TripApprovalRecordMapper approvalRecordMapper) {
+    public TripOrderService(TripOrderMapper mapper, TripApprovalRecordMapper approvalRecordMapper,
+                            BookingRecordService bookingRecordService) {
         this.mapper = mapper;
         this.approvalRecordMapper = approvalRecordMapper;
+        this.bookingRecordService = bookingRecordService;
     }
 
     /** 创建出差申请单并同步创建待审批记录，两个持久化动作必须原子提交。 */
@@ -176,6 +180,25 @@ public class TripOrderService {
         require(mapper.owned(owner, orderId));
         changed(mapper.deleteOwned(owner, orderId));
         return Response.success();
+    }
+
+    /** 取消当前用户已审批的差旅单；存在已支付关联预订时必须先取消预订。 */
+    @Transactional
+    public Response<TripOrderVO> cancel(String userId, String id) {
+        String owner = required(userId);
+        String orderId = required(id);
+        // 锁定申请单并检查状态，确保取消只作用于本人已审批的差旅单。
+        TripOrderEntity order = require(mapper.lockOwned(owner, orderId));
+        if (!TripOrderStatus.APPROVED.name().equals(order.getStatus())) {
+            throw new BizException(TripErrorCode.INVALID_STATUS);
+        }
+
+        // 关联预订状态在同一事务中加锁检查，已支付订单需要先经预订取消流程处理。
+        if (bookingRecordService.hasPaidByTravelOrder(owner, orderId)) {
+            throw new BizException(TripErrorCode.LINKED_BOOKING_PAID);
+        }
+        changed(mapper.cancelApprovedOwned(owner, orderId));
+        return Response.success(toVO(require(mapper.owned(owner, orderId))));
     }
 
     /** 将数据库实体转换为接口返回对象。 */

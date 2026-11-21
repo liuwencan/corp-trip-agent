@@ -439,7 +439,9 @@ public class ItineraryPlanDesignTools {
      * @return outbound 表示去程，return 表示返程
      */
     private String classifyDirection(JSONObject transport, JSONObject request) {
-        String direction = normalize(transport.getString("direction")).toLowerCase();
+        // 途牛候选通常不提供 direction，缺失时继续根据城市和日期推断方向。
+        String direction = normalize(transport.getString("direction"));
+        direction = direction == null ? "" : direction.toLowerCase();
         if (Set.of("outbound", "去程", "go", "depart").contains(direction)) {
             return "outbound";
         }

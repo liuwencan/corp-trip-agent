@@ -60,6 +60,12 @@ public class TripOrderController {
         return service.delete(ownerId(), id);
     }
 
+    /** 取消当前用户已审批的差旅单。 */
+    @PostMapping("/{id}/cancel")
+    public Response<TripOrderVO> cancel(@PathVariable String id) {
+        return service.cancel(ownerId(), id);
+    }
+
     /** 获取当前认证用户 ID 的字符串形式，以匹配业务表字段类型。 */
     private String ownerId() {
         return String.valueOf(currentUser.get().getId());

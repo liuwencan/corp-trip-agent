@@ -3,6 +3,10 @@ package cn.lwccxy.trip.business.userprofile.service;
 import cn.lwccxy.trip.business.userprofile.domain.entity.UserProfileEntity;
 import cn.lwccxy.trip.business.userprofile.domain.vo.UserProfileVO;
 import cn.lwccxy.trip.business.userprofile.mapper.UserProfileMapper;
+import cn.lwccxy.trip.business.userprofile.enums.ProfileGender;
+import cn.lwccxy.trip.business.userprofile.enums.ProfileIdType;
+import cn.lwccxy.trip.business.userprofile.enums.ProfileLevel;
+import cn.lwccxy.trip.system.user.mapper.UserMapper;
 import org.springframework.beans.BeanUtils;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -19,10 +23,12 @@ public class UserProfileService {
     private static final Pattern PHONE_PATTERN = Pattern.compile("^[+0-9()\\-\\s]{7,32}$");
 
     private final UserProfileMapper mapper;
+    private final UserMapper userMapper;
 
     /** 创建用户档案服务。 */
-    public UserProfileService(UserProfileMapper mapper) {
+    public UserProfileService(UserProfileMapper mapper, UserMapper userMapper) {
         this.mapper = mapper;
+        this.userMapper = userMapper;
     }
 
     /** 查询指定用户的预订档案，不返回数据库主键以外的内部元数据。 */
@@ -44,6 +50,11 @@ public class UserProfileService {
         validate(changes);
         if (!hasUpdates(changes)) {
             throw new IllegalArgumentException("至少提供一个需要保存的个人资料字段。");
+        }
+
+        // 与个人中心共用账户行锁，防止 Agent 与前端并发读写档案时相互覆盖字段。
+        if (userMapper.selectByIdForUpdate(Long.valueOf(owner)) == null) {
+            throw new IllegalArgumentException("当前用户不存在，请重新登录后重试。");
         }
 
         // 将用户身份作为唯一档案主键，忽略任何由工具参数传入的其他用户标识。
@@ -76,7 +87,8 @@ public class UserProfileService {
     private void mergeNonBlankFields(UserProfileEntity target, UserProfileEntity changes) {
         if (hasText(changes.getBaseCity())) target.setBaseCity(changes.getBaseCity().trim());
         if (hasText(changes.getLevel())) target.setLevel(changes.getLevel().trim().toUpperCase(Locale.ROOT));
-        if (hasText(changes.getNamePinyin())) target.setNamePinyin(changes.getNamePinyin().trim());
+        if (hasText(changes.getNamePinyin())) target.setNamePinyin(changes.getNamePinyin().trim()
+                .replaceAll("\\s+", " ").toUpperCase(Locale.ROOT));
         if (hasText(changes.getEmail())) target.setEmail(changes.getEmail().trim());
         if (hasText(changes.getChineseName())) target.setChineseName(changes.getChineseName().trim());
         if (changes.getIdType() != null) target.setIdType(changes.getIdType());
@@ -101,16 +113,10 @@ public class UserProfileService {
         if (hasText(changes.getPhone()) && !PHONE_PATTERN.matcher(changes.getPhone().trim()).matches()) {
             throw new IllegalArgumentException("手机号格式无效，请检查后重试。");
         }
-        if (changes.getIdType() != null && (changes.getIdType() < 0 || changes.getIdType() > 9)) {
-            throw new IllegalArgumentException("证件类型无效，可选值为 0 到 9。");
-        }
-        if (hasText(changes.getGender()) && !"M".equalsIgnoreCase(changes.getGender().trim())
-                && !"F".equalsIgnoreCase(changes.getGender().trim())) {
-            throw new IllegalArgumentException("性别代码无效，只能填写 M 或 F。");
-        }
-        if (hasText(changes.getLevel()) && !changes.getLevel().trim().matches("(?i)^P\\d{1,2}$")) {
-            throw new IllegalArgumentException("职级格式无效，请使用如 P5、P7 的格式。");
-        }
+        // 工具入口与前端使用同一组枚举约束，避免绕过接口写入不支持的编码。
+        if (changes.getIdType() != null) ProfileIdType.fromCode(changes.getIdType());
+        if (hasText(changes.getGender())) ProfileGender.fromCode(changes.getGender().trim().toUpperCase(Locale.ROOT));
+        if (hasText(changes.getLevel())) ProfileLevel.fromCode(changes.getLevel().trim().toUpperCase(Locale.ROOT));
     }
 
     /** 验证字段的数据库长度上限。 */

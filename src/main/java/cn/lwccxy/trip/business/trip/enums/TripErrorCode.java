@@ -13,7 +13,11 @@ public enum TripErrorCode implements BaseExceptionInterface {
     /** 申请单或审批记录不存在，或不属于当前用户。 */
     RESOURCE_NOT_FOUND("RESOURCE_NOT_FOUND", "出差申请单或审批记录不存在"),
     /** 申请单关联关系不合法。 */
-    ORDER_RELATION_INVALID("ORDER_RELATION_INVALID", "审批记录关联的申请单无效");
+    ORDER_RELATION_INVALID("ORDER_RELATION_INVALID", "审批记录关联的申请单无效"),
+    /** 申请单当前状态不允许取消。 */
+    INVALID_STATUS("INVALID_STATUS", "当前差旅单状态不允许取消"),
+    /** 关联预订仍有已支付订单，必须先取消预订。 */
+    LINKED_BOOKING_PAID("LINKED_BOOKING_PAID", "关联预订中存在已支付订单，请先取消关联预订后再取消差旅单");
 
     private final String errorCode;
     private final String errorMessage;

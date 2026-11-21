@@ -3,6 +3,7 @@ package cn.lwccxy.trip.agent;
 import cn.lwccxy.trip.agent.session.CorpTripSessionKey;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.agent.Agent;
+import io.agentscope.core.plan.PlanNotebook;
 import io.agentscope.core.session.Session;
 import io.agentscope.core.state.SessionKey;
 import jakarta.annotation.Resource;
@@ -117,10 +118,15 @@ public class AgentRegistry {
             logger.info("[AgentRegistry] 已向 Agent 发出中断请求，sessionId={}, agentName={}",
                     sessionId, agent.getName());
 
-            // 手动保存下每个Agent会话的session, 防止丢失消息
+            // 手动保存每个 Agent 的会话，防止中断发生在 Hook 事件之间而丢失消息。
             ReActAgent rctAgent = (ReActAgent)agent;
             SessionKey sessionKey = new CorpTripSessionKey(sessionId, rctAgent.getName());
             rctAgent.saveTo(session, sessionKey);
+            PlanNotebook planNotebook = rctAgent.getPlanNotebook();
+            if (planNotebook != null) {
+                // 计划 Agent 由专用 Hook 管理计划状态；中断路径没有 Hook 事件时在这里补充保存。
+                planNotebook.saveTo(session, sessionKey);
+            }
         }
         return true;
     }

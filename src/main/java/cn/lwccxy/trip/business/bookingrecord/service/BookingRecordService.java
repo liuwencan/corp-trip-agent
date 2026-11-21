@@ -134,6 +134,16 @@ public class BookingRecordService {
         return Response.success(toVO(requireOwned(required(userId), required(bookingId))));
     }
 
+    /** 锁定并检查差旅单关联的正式预订记录是否存在已支付订单。 */
+    @Transactional
+    public boolean hasPaidByTravelOrder(String userId, String travelOrderId) {
+        String owner = required(userId);
+        String orderId = required(travelOrderId);
+        // 在差旅单取消事务中锁定关联预订，避免检查期间已有预订状态并发变更。
+        return mapper.lockStatusesByTravelOrder(owner, orderId).stream()
+                .anyMatch("PAID"::equals);
+    }
+
     /**
      * 按平台、业务类型和外部订单号查询未删除的预订记录，供内部落库流程检查重复订单。
      *

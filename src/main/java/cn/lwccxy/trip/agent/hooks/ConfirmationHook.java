@@ -56,8 +56,6 @@ public class ConfirmationHook implements Hook {
                     contextView.getOrDefault("agentRuntimeContext", null);
 
             if (event instanceof PostReasoningEvent e) {
-                logger.info("ConfirmationHook开始执行");
-
                 String sessionId = runtimeContext.getSessionId();
                 SseEmitter emitter = sseEmitterRegistry.getEmitter(sessionId);
 
@@ -91,6 +89,7 @@ public class ConfirmationHook implements Hook {
                         );
                     }
                     e.stopAgent();
+                    logger.info("[ConfirmationHook] 当前信息不足, 触发ASK_USER工具, 向用户澄清信息");
                 }
             }
 

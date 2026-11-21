@@ -9,6 +9,7 @@ import io.agentscope.core.agent.Agent;
 import io.agentscope.core.hook.*;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.ToolUseBlock;
+import io.agentscope.core.plan.PlanNotebook;
 import io.agentscope.core.session.Session;
 import io.agentscope.core.state.SessionKey;
 import io.agentscope.core.state.SimpleSessionKey;
@@ -56,7 +57,6 @@ public class PersistSessionHook implements Hook {
             ReActAgent agent = (ReActAgent) event.getAgent();
             String agentName = agent.getName();
             String agentId = agent.getAgentId();
-
             SessionKey sessionKey = new CorpTripSessionKey(sessionId, agentName);
 
             if(event instanceof PreCallEvent){
@@ -74,7 +74,8 @@ public class PersistSessionHook implements Hook {
 
     @Override
     public int priority() {
-        // 比 PendingToolRecoveryHook 的优先级要高, 因为 PendingToolRecoveryHook 需要拿到历史会话记忆去做处理兜底, 否则看不到记忆
-        return 9;
+        // 比 PendingToolRecoveryHook、AutoMemoryHook 的优先级要高, 因为 PendingToolRecoveryHook 需要拿到历史会话记忆去做处理兜底, 否则看不到记忆。
+        // AutoMemoryHook 上下文压缩也需要看到上下文的消息判断需不需要压缩
+        return -1;
     }
 }

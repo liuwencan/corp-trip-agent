@@ -41,10 +41,14 @@
 | `TRAVEL_POLICY_QUERY` | `GeneralInfoAgent` |
 | `TRAVEL_INFO_QUERY` | `GeneralInfoAgent` |
 | `CREATE_TRIP_APPLICATION` | `TripOrderManagementAgent` |
+| `TRIP_APPLICATION_QUERY` | `TripOrderManagementAgent` |
+| `TRIP_APPLICATION_ACTION` | `TripOrderManagementAgent` |
+| `TRAVEL_RESOURCE_QUERY` | `ItineraryPlanningAgent` |
 | `PLAN_ITINERARY` | `ItineraryPlanningAgent` |
 | `BOOK_TRAVEL` | `BookingAgent` |
-| `MANAGE_ORDER` | `TripOrderManagementAgent` |
-| `APPROVAL_QUERY` | `ApprovalAgent` |
+| `CANCEL_BOOKING` | `BookingAgent` |
+| `APPROVAL_QUERY` | `TripOrderManagementAgent` |
+| `APPROVAL_ACTION` | `TripOrderManagementAgent` |
 | `REIMBURSEMENT` | `ReimbursementAgent` |
 | `CHAT` | `MasterAgent`（直接回复，不调度子智能体） |
 | `UNKNOWN` | `MasterAgent` |

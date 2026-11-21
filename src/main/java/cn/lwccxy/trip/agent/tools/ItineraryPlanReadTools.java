@@ -1,6 +1,7 @@
 package cn.lwccxy.trip.agent.tools;
 
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
+import cn.lwccxy.trip.agent.tools.store.ItineraryPlanStore;
 import cn.lwccxy.trip.agent.tools.store.TuniuSearchCandidateStore;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
@@ -25,14 +26,18 @@ public class ItineraryPlanReadTools {
     private static final Logger logger = LoggerFactory.getLogger(ItineraryPlanReadTools.class);
 
     private final TuniuSearchCandidateStore candidateStore;
+    private final ItineraryPlanStore itineraryPlanStore;
 
     /**
      * 创建行程候选读取工具。
      *
      * @param candidateStore 按用户隔离的途牛搜索候选存储
+     * @param itineraryPlanStore 按用户和行程隔离的规划结果存储
      */
-    public ItineraryPlanReadTools(TuniuSearchCandidateStore candidateStore) {
+    public ItineraryPlanReadTools(TuniuSearchCandidateStore candidateStore,
+                                  ItineraryPlanStore itineraryPlanStore) {
         this.candidateStore = candidateStore;
+        this.itineraryPlanStore = itineraryPlanStore;
     }
 
     /**
@@ -69,6 +74,63 @@ public class ItineraryPlanReadTools {
         logger.info("[TOOL][get_candidates] userId={}, transports={}, hotels={}", userId,
                 candidates.getJSONArray("transport_options").size(), candidates.getJSONArray("hotel_options").size());
         return candidates.toJSONString();
+    }
+
+    /**
+     * 读取当前用户经过规划、审核和修复后保存的最终行程方案。
+     *
+     * <p>规划工具每次重跑都会覆盖同一行程的 Redis 记录，因此这里读取到的是审核闭环完成后
+     * 最近一次生成的完整方案，供预订智能体确认具体产品后继续下单。</p>
+     *
+     * @param origin 出发城市
+     * @param destination 目的地城市
+     * @param departureDate 去程日期，格式为 YYYY-MM-DD
+     * @param returnDate 返程日期，格式为 YYYY-MM-DD
+     * @param runtimeContext 当前会话上下文，用于隔离用户方案
+     * @return Redis 中保存的完整方案 JSON；参数缺失、未找到方案或缓存内容非法时返回错误 JSON
+     */
+    @Tool(name = "get_plan_result", description = "仅在预订下单场景调用，读取当前用户经过审核和修复后最终确定的完整行程方案。方案来自 Redis 中该用户和行程的最新规划结果，未找到时不得自行编造方案。")
+    public String getPlanResult(
+            @ToolParam(name = "origin", description = "出发城市，例如上海") String origin,
+            @ToolParam(name = "destination", description = "目的地城市，例如杭州") String destination,
+            @ToolParam(name = "departure_date", description = "去程日期，格式 YYYY-MM-DD") String departureDate,
+            @ToolParam(name = "return_date", description = "返程日期，格式 YYYY-MM-DD") String returnDate,
+            AgentRuntimeContext runtimeContext) {
+        if (runtimeContext == null || isBlank(runtimeContext.getUserId())) {
+            logger.warn("[TOOL][get_plan_result] 缺少当前用户上下文，拒绝读取最终方案");
+            return errorResult("缺少当前用户上下文，无法读取最终行程方案。");
+        }
+        if (isBlank(origin) || isBlank(destination) || isBlank(departureDate) || isBlank(returnDate)) {
+            return errorResult("出发城市、目的地城市、去程日期和返程日期均为必填项。");
+        }
+
+        String userId = runtimeContext.getUserId().trim();
+        String normalizedOrigin = origin.trim();
+        String normalizedDestination = destination.trim();
+        String normalizedDepartureDate = departureDate.trim();
+        try {
+            // 规划修复会覆盖同一行程 field，这里读取 Redis 中最新一次完整方案，确保预订使用最终版本。
+            String stored = itineraryPlanStore.load(userId, normalizedOrigin, normalizedDestination,
+                    normalizedDepartureDate);
+            if (isBlank(stored)) {
+                return errorResult("未找到该行程的最终规划方案，请先完成行程规划和审核。");
+            }
+
+            // 读取后先校验缓存内容是 JSON 对象，避免将损坏的缓存直接传给预订智能体。
+            JSONObject plan = JSON.parseObject(stored);
+            if (plan == null || plan.isEmpty()) {
+                logger.warn("[TOOL][get_plan_result] Redis 中的最终方案为空对象，userId={}, origin={}, destination={}, departureDate={}",
+                        userId, normalizedOrigin, normalizedDestination, normalizedDepartureDate);
+                return errorResult("Redis 中的最终规划方案内容无效，请重新完成行程规划。");
+            }
+            logger.info("[TOOL][get_plan_result] 已读取最终方案: userId={}, origin={}, destination={}, departureDate={}",
+                    userId, normalizedOrigin, normalizedDestination, normalizedDepartureDate);
+            return stored;
+        } catch (RuntimeException exception) {
+            logger.error("[TOOL][get_plan_result] 读取最终方案失败: userId={}, origin={}, destination={}, departureDate={}",
+                    userId, normalizedOrigin, normalizedDestination, normalizedDepartureDate, exception);
+            return errorResult("读取最终规划方案失败，请稍后重试。");
+        }
     }
 
     /**
@@ -369,6 +431,19 @@ public class ItineraryPlanReadTools {
         if (error != null) {
             result.put("error", error);
         }
+        return result.toJSONString();
+    }
+
+    /**
+     * 构造最终方案读取工具统一错误 JSON。
+     *
+     * @param message 错误说明
+     * @return 包含失败标识和错误信息的 JSON 字符串
+     */
+    private String errorResult(String message) {
+        JSONObject result = new JSONObject();
+        result.put("ok", false);
+        result.put("error", message);
         return result.toJSONString();
     }
 }

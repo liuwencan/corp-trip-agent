@@ -5,6 +5,7 @@ import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
 import cn.lwccxy.trip.agent.hooks.ConfirmationHook;
 import cn.lwccxy.trip.agent.hooks.LongTermMemoryRecordHook;
 import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
+import cn.lwccxy.trip.agent.hooks.PersistPlanNoteHook;
 import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
 import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
@@ -23,6 +24,17 @@ public class CorpTripAgentHookConfig {
     @Bean
     public PersistSessionHook persistSessionHook(Session mysqlSession) {
         return new PersistSessionHook(mysqlSession);
+    }
+
+    /**
+     * 创建仅处理计划模式 Agent 的当前计划状态持久化 Hook。
+     *
+     * @param mysqlSession AgentScope MySQL 会话存储
+     * @return 计划状态持久化 Hook
+     */
+    @Bean
+    public PersistPlanNoteHook persistPlanNoteHook(Session mysqlSession) {
+        return new PersistPlanNoteHook(mysqlSession);
     }
 
     /**

@@ -16,7 +16,6 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -63,7 +62,8 @@ public class ModelUsageBillingHook implements Hook {
 
             // 仅按模型名精确匹配已维护的价格，未知型号不套用其他模型单价。
             String modelName = reasoningEvent.getModelName();
-            Optional<ModelPricingEnum> pricing = findPricing(modelName);
+            Optional<ModelPricingEnum> pricing = ModelPricingEnum.findByModelName(modelName);
+            // AgentScope 1.0.12 的 ChatUsage 不含缓存命中数，日志按普通输入价格估算。
             BigDecimal cost = pricing.map(model -> ModelTokenBillingUtil.calculateCost(
                     usage.getInputTokens(), usage.getOutputTokens(), model)).orElse(null);
             AgentRuntimeContext runtimeContext = contextView.getOrDefault("agentRuntimeContext", null);
@@ -80,18 +80,4 @@ public class ModelUsageBillingHook implements Hook {
         });
     }
 
-    /**
-     * 按模型服务端名称查找项目中已维护的标准单价。
-     *
-     * @param modelName 模型服务端名称
-     * @return 匹配的价格配置；未配置时返回空
-     */
-    private Optional<ModelPricingEnum> findPricing(String modelName) {
-        if (modelName == null || modelName.isBlank()) {
-            return Optional.empty();
-        }
-        return Arrays.stream(ModelPricingEnum.values())
-                .filter(pricing -> pricing.getModelName().equals(modelName))
-                .findFirst();
-    }
 }

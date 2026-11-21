@@ -37,9 +37,34 @@ public class ProgressNotificationHook implements Hook {
     private static final Logger logger = LoggerFactory.getLogger(ProgressNotificationHook.class);
 
     // Hook 为共享实例，名称映射只读，避免不同会话并发调用时修改共享状态。
-    private static final Map<String, String> TOOL_NAMES = Map.of(
-            "get_userinfo", "获取用户信息",
-            "ask_user", "请求用户补充信息");
+    private static final Map<String, String> TOOL_NAMES = Map.ofEntries(
+            Map.entry("get_userinfo", "获取用户信息"),
+            Map.entry("ask_user", "请求用户补充信息"),
+            Map.entry("query_travel_policy", "查询差旅政策"),
+            Map.entry("get_candidates", "获取候选行程方案"),
+            Map.entry("query_weather", "查询天气"),
+            Map.entry("execute_shell_command", "执行Shell命令"),
+            Map.entry("load_skill_through_path", "加载skill技能"),
+            Map.entry("query_destination_news", "查询资讯"),
+            Map.entry("retrieveFromMemory", "召回偏好"),
+            Map.entry("check_trip_time_validity", "检查行程有效期"),
+            Map.entry("get_trip_order_detail", "查询差旅单详情"),
+            Map.entry("review_itinerary_plan", "行程方案审核"),
+            Map.entry("check_travel_policy", "检查行程订单信息是否符合用户享有的差旅政策"),
+            Map.entry("save_provider_api_key", "保存第三方平台ApiKey"),
+            Map.entry("query_provider_api_key_status", "查询是否配置ApiKey"),
+            Map.entry("get_current_user_profile", "获取用户信息"),
+            Map.entry("update_current_user_profile", "更新用户信息"),
+            Map.entry("create_plan", "创建行程计划"),
+            Map.entry("update_plan_info", "更新计划信息"),
+            Map.entry("revise_current_plan", "调整当前计划"),
+            Map.entry("update_subtask_state", "更新子任务状态"),
+            Map.entry("finish_subtask", "完成子任务"),
+            Map.entry("view_subtasks", "查看子任务"),
+            Map.entry("get_subtask_count", "查看子任务数量"),
+            Map.entry("finish_plan", "完成或放弃计划"),
+            Map.entry("view_historical_plans", "查看历史计划"),
+            Map.entry("recover_historical_plan", "恢复历史计划"));
 
     private static final Map<String, String> AGENT_NAMES = Map.of(
             "MasterAgent", "主智能体",

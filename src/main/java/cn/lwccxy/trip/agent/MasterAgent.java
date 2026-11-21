@@ -112,7 +112,7 @@ public class MasterAgent {
     @Scope("prototype")
     public ReActAgent masterAgent() {
         AgentRuntimeContext agentRuntimeContext = AgentRuntimeContextHolder.get();
-        logger.info("MasterAgent正在构建中, userId: {}, sessionId: {}", agentRuntimeContext.getUserId(), agentRuntimeContext.getSessionId());
+        logger.info("[MasterAgent] 主智能体正在构建中, userId: {}, sessionId: {}", agentRuntimeContext.getUserId(), agentRuntimeContext.getSessionId());
 
         // 子智能体按工具调用所需任务独立响应，主智能体负责选择和组合它们的结果。
         Toolkit toolkit = new Toolkit();
@@ -144,7 +144,7 @@ public class MasterAgent {
         toolkit.registerAgentTool(new SubAgentTool(() -> tripOrderAgent, tripOrderConfig));
         SubAgentConfig bookingConfig = SubAgentConfig.builder()
                 .toolName("BookingAgent")
-                .description("负责查询并比较机票、火车票和酒店选项；仅在用户明确确认具体方案后执行供应商预订")
+                .description("负责查询并比较机票、火车票和酒店选项，在用户明确确认后完成预订，并处理用户明确要求的已有预订取消")
                 .forwardEvents(false)
                 .build();
         toolkit.registerAgentTool(new SubAgentTool(() -> bookingAgent, bookingConfig));
@@ -173,9 +173,9 @@ public class MasterAgent {
                 .sysPrompt(masterAgentPrompt)
                 .toolkit(toolkit)
                 .toolExecutionContext(context)
-                .maxIters(100)
+                .maxIters(150)
                 .toolExecutionConfig(ExecutionConfig.builder()
-                        .timeout(Duration.ofMinutes(30)).build()) // 工具执行超时配置
+                        .timeout(Duration.ofMinutes(60)).build()) // 工具执行超时配置
                 .hooks(List.of(agentRegistryHook, new AutoContextHook(), confirmationHook, persistSessionHook,
                         // 全链路监控放在进度推送之前，保证统计到的是推送前的真实耗时。
                         agentExecutionMonitorHook, agentTracePersistenceHook,

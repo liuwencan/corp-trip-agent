@@ -96,8 +96,6 @@ public class ProviderApiKeyTools {
             @ToolParam(name = "providerCode", description = "可选平台类型编码，例如 TUNIU；不传则查询全部平台", required = false)
             String providerCode) {
 
-        logger.info("[queryProviderApiKeyStatus]执行");
-
         try {
             Long userId = requireUserId(sessionContext);
             String normalizedProviderCode = normalizeOptionalProviderCode(providerCode);

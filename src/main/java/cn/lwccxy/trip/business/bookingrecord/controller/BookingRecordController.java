@@ -60,6 +60,14 @@ public class BookingRecordController {
         return service.delete(ownerId(), bookingId);
     }
 
+    /** 占位：取消当前用户所属的预订记录。 */
+    @PostMapping("/{bookingId}/cancel")
+    public Response<Void> cancel(@PathVariable String bookingId) {
+        // 暂时只保留接口和 bookingId 参数，取消业务逻辑待后续接入服务层。
+        return Response.success();
+    }
+
+
     /** 获取当前认证用户 ID 的字符串形式。 */
     private String ownerId() {
         return String.valueOf(currentUser.get().getId());

@@ -21,6 +21,8 @@ import io.agentscope.core.skill.repository.AgentSkillRepository;
 import io.agentscope.core.tool.ToolExecutionContext;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.coding.ShellCommandTool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,6 +40,9 @@ import java.util.Set;
 /** 配置通过途牛服务查询并执行机票、火车票及酒店预订的专职智能体。 */
 @Configuration("bookingAgentConfiguration")
 public class BookingAgent {
+
+    private final Logger logger = LoggerFactory.getLogger(BookingAgent.class);
+
 
     private static final String PROMPT_RESOURCE_PATH = "sysprompt/BookingAgentPrompt.md";
     private static final Set<String> ALLOWED_COMMANDS = Set.of(
@@ -119,6 +124,8 @@ public class BookingAgent {
     @Scope("prototype")
     public ReActAgent bookingAgent() {
         AgentRuntimeContext runtimeContext = AgentRuntimeContextHolder.get();
+        logger.info("[BookingAgent] 预订智能体正在构建中, userId: {}, sessionId: {}", runtimeContext.getUserId(), runtimeContext.getSessionId());
+
         // 工具执行上下文绑定当前认证用户，凭证 Hook 据此注入对应的途牛 API Key。
         ToolExecutionContext executionContext = ToolExecutionContext.builder()
                 .register(runtimeContext)
@@ -147,7 +154,7 @@ public class BookingAgent {
         // 搜索结果先精简再捕获，避免重复结构化内容进入模型上下文，同时保留后续选品所需的候选。
         return ReActAgent.builder()
                 .name("BookingAgent")
-                .description("通过途牛服务搜索、比较并在用户明确确认后预订机票、火车票和酒店")
+                .description("通过途牛服务搜索、比较、预订机票火车票酒店，并按用户明确请求取消已有预订")
                 .model(model)
                 .sysPrompt(bookingPrompt)
                 .toolkit(toolkit)

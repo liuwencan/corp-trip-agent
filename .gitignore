@@ -37,6 +37,7 @@ node_modules/
 # 保留既有忽略范围，仅纳入本地意图规则的回归测试。
 !/src/test/**/
 !/src/test/java/cn/lwccxy/trip/agent/intent/IntentRecognizerL1Test.java
+!/src/test/java/cn/lwccxy/trip/agent/intent/IntentRecognizerL2Test.java
 # 纳入个人资料接口的鉴权、事务和枚举校验回归测试。
 !/src/test/java/cn/lwccxy/trip/business/userprofile/PersonalProfileIntegrationTest.java
 !/src/test/resources/personal-profile-schema.sql

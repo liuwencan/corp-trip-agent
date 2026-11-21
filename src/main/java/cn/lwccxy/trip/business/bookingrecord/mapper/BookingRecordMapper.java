@@ -17,6 +17,12 @@ public interface BookingRecordMapper extends BaseMapper<BookingRecordEntity> {
     @Select("SELECT * FROM booking_record WHERE user_id=#{userId} AND booking_id=#{bookingId} AND deleted=0")
     BookingRecordEntity owned(@Param("userId") String userId, @Param("bookingId") String bookingId);
 
+    /** 锁定当前用户关联差旅单下的全部未删除预订状态，供差旅单取消前检查支付状态。 */
+    @Select("SELECT status FROM booking_record WHERE user_id=#{userId} AND travel_order_id=#{travelOrderId} "
+            + "AND deleted=0 ORDER BY id FOR UPDATE")
+    List<String> lockStatusesByTravelOrder(@Param("userId") String userId,
+                                           @Param("travelOrderId") String travelOrderId);
+
     /** 按当前用户、平台、产品类型和供应商订单号将正式预订状态更新为已取消。 */
     @Update("UPDATE booking_record SET status='CANCELLED', external_status=#{externalStatus}, "
             + "updated_at=CURRENT_TIMESTAMP WHERE user_id=#{userId} AND platform=#{platform} "

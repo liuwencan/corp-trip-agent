@@ -17,6 +17,8 @@ import io.agentscope.core.memory.autocontext.AutoContextMemory;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.tool.ToolExecutionContext;
 import io.agentscope.core.tool.Toolkit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
@@ -36,6 +38,7 @@ public class OrderManagementAgent {
     private final TripOrderReadTools tripOrderReadTools;
     private final TripOrderWriteTools tripOrderWriteTools;
     private final TripScheduleConflictTools tripScheduleConflictTools;
+    private final Logger logger = LoggerFactory.getLogger(OrderManagementAgent.class);
 
     /** 创建行程单管理智能体配置。 */
     public OrderManagementAgent(Model model, PersistSessionHook persistSessionHook,
@@ -62,6 +65,8 @@ public class OrderManagementAgent {
     @Scope("prototype")
     public ReActAgent orderManagementAgent() {
         AgentRuntimeContext agentRuntimeContext = AgentRuntimeContextHolder.get();
+
+        logger.info("[OrderManagementAgent] 行程单管理智能体正在构建中, userId: {}, sessionId: {}", agentRuntimeContext.getUserId(), agentRuntimeContext.getSessionId());
 
         // 将当前请求上下文绑定到新建 Agent，供 Hook 按会话和智能体名称隔离持久化状态。
         ToolExecutionContext context = ToolExecutionContext.builder()

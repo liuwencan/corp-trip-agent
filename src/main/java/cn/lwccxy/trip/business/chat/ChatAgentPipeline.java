@@ -57,7 +57,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class ChatAgentPipeline {
     private final Logger logger = LoggerFactory.getLogger(ChatAgentPipeline.class);
-    private final Long SSE_TIMEOUT = 1800000L; // 30分钟
+    private final Long SSE_TIMEOUT = 18000000L; // 30分钟
     private final ConversationService conversations;
     private final ConversationCoordinator coordinator;
     private final ConversationMapper conversationMapper;
@@ -96,7 +96,7 @@ public class ChatAgentPipeline {
     /** 为当前用户执行一次会话，先保存用户消息，再通过服务端事件推送智能体响应。 */
     public SseEmitter execute(Long userId, Long conversationId, String question) {
         String traceId = UUID.randomUUID().toString();
-        logger.info("[ChatAgentPipeline] execute 方法开始执行, traceId: {}", traceId);
+        logger.info("[ChatAgentPipeline] Pipeline开始执行, 用户原始问题为：{}, userId: {}, sessionId: {}, traceId: {}", question, userId, conversationId ,traceId);
 
         // 1. 问题校验
         validateQuestion(question);

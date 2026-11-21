@@ -169,6 +169,7 @@ public class BookingPersistenceHook implements Hook {
         bookingRecord.setBookedAt(LocalDateTime.now()); // 执行预定的时间
         bookingRecord.setStatus("CREATED"); // 创建状态
         bookingRecord.setPaymentStatus("UNPAID"); // 未支付状态
+//        bookingRecord.setPayUrl();  // 第三方支付地址（从途牛CLI命中返回结果提取）
         // ========== 联系人 和 联系电话 和 出发时间 这些参数应该尽量从CLI命令-a的入参去补全 ========
         enrichFromArgs(bookingRecord, bizType, arguments);
 
