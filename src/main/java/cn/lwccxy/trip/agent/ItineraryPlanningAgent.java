@@ -2,19 +2,7 @@ package cn.lwccxy.trip.agent;
 
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
-import cn.lwccxy.trip.agent.hooks.AgentRegistryHook;
-import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
-import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
-import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
-import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
-import cn.lwccxy.trip.agent.hooks.LongTermMemoryRecordHook;
-import cn.lwccxy.trip.agent.hooks.PersistPlanNoteHook;
-import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
-import cn.lwccxy.trip.agent.hooks.SkillContentCollapseHook;
-import cn.lwccxy.trip.agent.hooks.TuniuApiKeyShellHook;
-import cn.lwccxy.trip.agent.hooks.TuniuShellCommandValidator;
-import cn.lwccxy.trip.agent.hooks.TuniuSearchResultHook;
-import cn.lwccxy.trip.agent.hooks.TuniuSearchResultCaptureHook;
+import cn.lwccxy.trip.agent.hooks.*;
 import cn.lwccxy.trip.agent.memory.CropTripLongTermMemory;
 import cn.lwccxy.trip.agent.store.plan.RedisPlanStorage;
 import cn.lwccxy.trip.agent.tools.*;
@@ -94,6 +82,7 @@ public class ItineraryPlanningAgent {
     private final StringRedisTemplate redisTemplate;
     private final UserProfileReadTools userProfileReadTools;
     private final UserProfileWriteTools userProfileWriteTools;
+    private final ActiveAgentPersistenceHook activeAgentPersistenceHook;
 
     /**
      * 创建行程规划智能体配置。
@@ -127,7 +116,8 @@ public class ItineraryPlanningAgent {
                                   RedisCacheUtil redisCache,
                                   StringRedisTemplate redisTemplate,
                                   UserProfileReadTools userProfileReadTools,
-                                  UserProfileWriteTools userProfileWriteTools) {
+                                  UserProfileWriteTools userProfileWriteTools,
+                                  ActiveAgentPersistenceHook activeAgentPersistenceHook) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
         this.persistPlanNoteHook = persistPlanNoteHook;
@@ -162,6 +152,7 @@ public class ItineraryPlanningAgent {
         this.redisTemplate = redisTemplate;
         this.userProfileReadTools = userProfileReadTools;
         this.userProfileWriteTools = userProfileWriteTools;
+        this.activeAgentPersistenceHook = activeAgentPersistenceHook;
     }
 
     /** 为当前业务会话创建隔离的行程规划智能体。 */
@@ -242,7 +233,7 @@ public class ItineraryPlanningAgent {
                         tuniuSearchResultCaptureHook, skillContentCollapseHook,
                         progressNotificationHook, modelUsageBillingHook, longTermMemoryRecordHook,
                         agentExecutionMonitorHook, agentTracePersistenceHook,
-                        new AutoContextHook(), new PendingToolRecoveryHook()))
+                        new AutoContextHook(), new PendingToolRecoveryHook(), activeAgentPersistenceHook))
                 .longTermMemory(longTermMemory)
                 .longTermMemoryMode(LongTermMemoryMode.AGENT_CONTROL) // AGENT_CONTROL模式：给Agent提供两个工具（检索/存储）由Agent决定何时调用工具进行存储长期记忆, 以及召回用户长期记忆
                 .build();

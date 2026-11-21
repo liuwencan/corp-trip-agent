@@ -1,14 +1,8 @@
 package cn.lwccxy.trip.agent.config;
 
-import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
-import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
-import cn.lwccxy.trip.agent.hooks.ConfirmationHook;
-import cn.lwccxy.trip.agent.hooks.LongTermMemoryRecordHook;
-import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
-import cn.lwccxy.trip.agent.hooks.PersistPlanNoteHook;
-import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
-import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
+import cn.lwccxy.trip.agent.hooks.*;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
+import cn.lwccxy.trip.agent.store.activeagent.ActiveAgentSessionStore;
 import cn.lwccxy.trip.business.conversation.service.ConversationService;
 import io.agentscope.core.session.Session;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -90,4 +84,9 @@ public class CorpTripAgentHookConfig {
         return new ProgressNotificationHook(sseEmitterRegistry);
     }
 
+
+    @Bean
+    public ActiveAgentPersistenceHook activeAgentPersistenceHook(ActiveAgentSessionStore activeAgentSessionStore) {
+        return new ActiveAgentPersistenceHook(activeAgentSessionStore);
+    }
 }

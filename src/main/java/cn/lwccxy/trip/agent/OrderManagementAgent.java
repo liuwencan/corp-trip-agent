@@ -2,11 +2,7 @@ package cn.lwccxy.trip.agent;
 
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
-import cn.lwccxy.trip.agent.hooks.AgentRegistryHook;
-import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
-import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
-import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
-import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
+import cn.lwccxy.trip.agent.hooks.*;
 import cn.lwccxy.trip.agent.tools.TripOrderReadTools;
 import cn.lwccxy.trip.agent.tools.TripOrderWriteTools;
 import cn.lwccxy.trip.agent.tools.TripScheduleConflictTools;
@@ -39,6 +35,7 @@ public class OrderManagementAgent {
     private final TripOrderWriteTools tripOrderWriteTools;
     private final TripScheduleConflictTools tripScheduleConflictTools;
     private final Logger logger = LoggerFactory.getLogger(OrderManagementAgent.class);
+    private final ActiveAgentPersistenceHook activeAgentPersistenceHook;
 
     /** 创建行程单管理智能体配置。 */
     public OrderManagementAgent(Model model, PersistSessionHook persistSessionHook,
@@ -48,7 +45,8 @@ public class OrderManagementAgent {
                                 ModelUsageBillingHook modelUsageBillingHook,
                                 AgentExecutionMonitorHook agentExecutionMonitorHook,
                                 AgentTracePersistenceHook agentTracePersistenceHook,
-                                AgentRegistryHook agentRegistryHook) {
+                                AgentRegistryHook agentRegistryHook,
+                                ActiveAgentPersistenceHook activeAgentPersistenceHook) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
         this.modelUsageBillingHook = modelUsageBillingHook;
@@ -58,6 +56,7 @@ public class OrderManagementAgent {
         this.tripOrderReadTools = tripOrderReadTools;
         this.tripOrderWriteTools = tripOrderWriteTools;
         this.tripScheduleConflictTools = tripScheduleConflictTools;
+        this.activeAgentPersistenceHook = activeAgentPersistenceHook;
     }
 
     /** 为当前业务会话创建独立的行程单管理智能体。 */
@@ -96,7 +95,8 @@ public class OrderManagementAgent {
                 .toolExecutionContext(context)
                 .memory(new AutoContextMemory(autoContextConfig, model))
                 .hooks(List.of(agentRegistryHook, persistSessionHook, agentExecutionMonitorHook,
-                        agentTracePersistenceHook, modelUsageBillingHook, new PendingToolRecoveryHook()))
+                        agentTracePersistenceHook, modelUsageBillingHook, new PendingToolRecoveryHook(),
+                        activeAgentPersistenceHook))
                 .build();
     }
 }

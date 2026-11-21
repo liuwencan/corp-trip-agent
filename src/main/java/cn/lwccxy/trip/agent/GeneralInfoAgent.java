@@ -2,12 +2,7 @@ package cn.lwccxy.trip.agent;
 
 import cn.lwccxy.trip.agent.context.AgentRuntimeContext;
 import cn.lwccxy.trip.agent.context.AgentRuntimeContextHolder;
-import cn.lwccxy.trip.agent.hooks.AgentRegistryHook;
-import cn.lwccxy.trip.agent.hooks.PersistSessionHook;
-import cn.lwccxy.trip.agent.hooks.AgentExecutionMonitorHook;
-import cn.lwccxy.trip.agent.hooks.AgentTracePersistenceHook;
-import cn.lwccxy.trip.agent.hooks.ModelUsageBillingHook;
-import cn.lwccxy.trip.agent.hooks.ProgressNotificationHook;
+import cn.lwccxy.trip.agent.hooks.*;
 import cn.lwccxy.trip.agent.tools.AskUserTool;
 import cn.lwccxy.trip.agent.tools.DestinationLiveTools;
 import cn.lwccxy.trip.agent.tools.PolicyTools;
@@ -61,7 +56,7 @@ public class GeneralInfoAgent {
     private final AgentRegistryHook agentRegistryHook;
     private final DestinationLiveTools destinationLiveTools;
     private final PolicyTools policyTools;
-
+    private final ActiveAgentPersistenceHook activeAgentPersistenceHook;
 
 
 
@@ -82,7 +77,7 @@ public class GeneralInfoAgent {
                             ModelUsageBillingHook modelUsageBillingHook,
                             AgentExecutionMonitorHook agentExecutionMonitorHook,
                             AgentTracePersistenceHook agentTracePersistenceHook,
-                            AgentRegistryHook agentRegistryHook) {
+                            AgentRegistryHook agentRegistryHook, ActiveAgentPersistenceHook activeAgentPersistenceHook) {
         this.dataSource = dataSource;
         this.model = model;
         this.weatherMcpClient = weatherMcpClient;
@@ -101,6 +96,7 @@ public class GeneralInfoAgent {
         this.agentRegistryHook = agentRegistryHook;
         this.destinationLiveTools = destinationLiveTools;
         this.policyTools = policyTools;
+        this.activeAgentPersistenceHook = activeAgentPersistenceHook;
     }
 
 
@@ -152,7 +148,7 @@ public class GeneralInfoAgent {
                 .ragMode(RAGMode.AGENTIC)
                 .memory(new AutoContextMemory(autoContextConfig, model))
                 .hooks(List.of(agentRegistryHook, persistSessionHook, agentExecutionMonitorHook, agentTracePersistenceHook,
-                        progressNotificationHook, modelUsageBillingHook, new PendingToolRecoveryHook()))
+                        progressNotificationHook, modelUsageBillingHook, new PendingToolRecoveryHook(), activeAgentPersistenceHook))
                 .build();
     }
 }

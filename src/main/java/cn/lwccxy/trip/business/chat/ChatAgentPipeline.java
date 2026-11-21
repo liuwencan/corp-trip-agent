@@ -7,6 +7,7 @@ import cn.lwccxy.trip.agent.enums.IntentType;
 import cn.lwccxy.trip.agent.enums.ModelPricingEnum;
 import cn.lwccxy.trip.agent.enums.RecognitionLevel;
 import cn.lwccxy.trip.agent.intent.IntentRecognizer;
+import cn.lwccxy.trip.agent.store.activeagent.ActiveAgentSessionStore;
 import cn.lwccxy.trip.agent.utils.ModelTokenBillingUtil;
 import cn.lwccxy.trip.business.conversation.domain.entity.ConversationEntity;
 import cn.lwccxy.trip.business.conversation.domain.entity.MessageEntity;
@@ -68,6 +69,12 @@ public class ChatAgentPipeline {
     private final Model lightWeightModel;
     private final IntentRecognizer intentRecognizer;
     private final ExecutorService chatTaskExecutor;
+    private final ActiveAgentSessionStore activeAgentSessionStore;
+
+    /** 全部扁平化的继续信号词集合（小写形式，"ok/yes/confirm/continue" 已统一为小写） */
+    public static final Set<String> ALL = Set.of(
+            "确定", "确认", "提交", "继续", "是的", "好的", "对", "好", "修改", "补充", "不对", "取消", "重新", "再",
+            "ok", "yes", "confirm", "continue", "修改一下", "补充一下", "重新来", "再来");
 
     /** 查询改写最多读取的历史消息数量，避免整段会话进入改写模型上下文。 */
     private static final int INTENT_HISTORY_MESSAGE_LIMIT = 12;
@@ -79,7 +86,8 @@ public class ChatAgentPipeline {
                              AgentRegistry agentRegistry,
                              @Qualifier("lightWeightModel") Model lightWeightModel,
                              IntentRecognizer intentRecognizer,
-                             @Qualifier("chatTaskExecutor") ExecutorService chatTaskExecutor) {
+                             @Qualifier("chatTaskExecutor") ExecutorService chatTaskExecutor,
+                             ActiveAgentSessionStore activeAgentSessionStore) {
         this.conversations = conversations;
         this.coordinator = coordinator;
         this.conversationMapper = conversationMapper;
@@ -90,6 +98,7 @@ public class ChatAgentPipeline {
         this.lightWeightModel = lightWeightModel;
         this.intentRecognizer = intentRecognizer;
         this.chatTaskExecutor = chatTaskExecutor;
+        this.activeAgentSessionStore = activeAgentSessionStore;
     }
 
 
@@ -124,36 +133,50 @@ public class ChatAgentPipeline {
                 // 因为Agent是多例模式, 每次通过applicationContext.get()方法获取其实都是创建一个新的对象
                 AgentRuntimeContextHolder.set(agentRuntimeContext);
                 try {
-                    // ============ 意图识别 =============
-                    // 推送意图开始事件
-                    // 先完成意图识别，再创建主 Agent，确保本轮路由信息稳定。
-                    SseEmitterSender.send(emitter, SseEventEnum.INTENT_RECOGNITION_START, traceId);
-                    // 在构建 prototype MasterAgent 前完成识别，使本轮 Agent 能拿到稳定的路由提示。
-                    IntentRecognizer.IntentRecognitionResult intentResult = intentRecognition(
-                            question, intentHistory, emitter, traceId);
-                    // 在结束事件前单独回传识别摘要，前端无需等待主 Agent 完成即可展示路由结果。
-                    sendIntentRecognitionResult(emitter, traceId, intentResult);
-                    // 推送意图结束事件
-                    SseEmitterSender.send(emitter, SseEventEnum.INTENT_RECOGNITION_END, traceId);
-
-                    // 主智能体创建阶段会读取 ThreadLocal，并将上下文复制到本次 Agent 专属 Hook 中。
-                    ReActAgent masterAgent = SpringContextUtil.getBean("masterAgent", ReActAgent.class);
+                    ReActAgent agent;
 
                     // 用户发送的消息
                     List<Msg> inputMsgs = new ArrayList<>();
                     inputMsgs.add(Msg.builder().role(MsgRole.USER).textContent(question).build());
-                    buildMasterAgentMsgs(inputMsgs, intentResult);
+
+                    // ============ 判断是否快速路由 =============
+                    // 1. 判断用户问题是否包含一些继续等快速路由的关键词, 如果包含的话, 再去检查当前session会话下是否有上一轮对话活跃的agent存在, 存在的话直接调度对应的活跃Agent
+                    // 2. 如果用户问题没有命中关键词, 或者是上一轮对话不存在活跃Agent。这种情况是直接走 意图识别 + MasterAgent 编排重新去做推理
+                    String activeAgent = activeAgentSessionStore.getActiveAgent(String.valueOf(conversationId));
+                    if(activeAgent != null && isContinue(question)){
+                        // 走直接调度活跃Agent
+                        logger.info("[ChatAgentPipeline] 命中继续信号的关键词且上一轮对话中存在活跃Agent, 走直接调度方式, 目标智能体为: {} | traceId: {} | userId: {} | sessionId: {}", activeAgent, traceId, userId, conversationId);
+                        activeAgent = activeAgent.substring(0, 1).toLowerCase() + activeAgent.substring(1);
+                        agent = SpringContextUtil.getBean(activeAgent, ReActAgent.class);
+                    }else{
+                        // ============ 意图识别 =============
+                        // 推送意图开始事件
+                        // 先完成意图识别，再创建主 Agent，确保本轮路由信息稳定。
+                        SseEmitterSender.send(emitter, SseEventEnum.INTENT_RECOGNITION_START, traceId);
+                        // 在构建 prototype MasterAgent 前完成识别，使本轮 Agent 能拿到稳定的路由提示。
+                        IntentRecognizer.IntentRecognitionResult intentResult = intentRecognition(
+                                question, intentHistory, emitter, traceId);
+                        // 在结束事件前单独回传识别摘要，前端无需等待主 Agent 完成即可展示路由结果。
+                        sendIntentRecognitionResult(emitter, traceId, intentResult);
+                        // 推送意图结束事件
+                        SseEmitterSender.send(emitter, SseEventEnum.INTENT_RECOGNITION_END, traceId);
+
+                        // 主智能体创建阶段会读取 ThreadLocal，并将上下文复制到本次 Agent 专属 Hook 中。
+                        agent = SpringContextUtil.getBean("masterAgent", ReActAgent.class);
+
+                        buildMasterAgentMsgs(inputMsgs, intentResult);
+                    }
 
                     // 记录首Token时长：以提交 Agent 流请求的时刻为起点，统计首个可见文本 Token 的端到端等待时长。
                     long agentStartNanos = System.nanoTime();
                     AtomicBoolean firstTokenRecorded = new AtomicBoolean();
                     AtomicBoolean terminal = new AtomicBoolean();
                     // 将识别结果作为一次性系统消息传给主 Agent，原始用户消息仍单独保留，避免改写用户语义或污染历史。
-                    Flux<Event> events = masterAgent.stream(inputMsgs, StreamOptions.defaults());
+                    Flux<Event> events = agent.stream(inputMsgs, StreamOptions.defaults());
                     events.doOnSubscribe(subscription ->
-                                    agentRegistry.register(activeConversationId.toString(), masterAgent))
+                                    agentRegistry.register(activeConversationId.toString(), agent))
                             .doFinally(signal ->
-                                    agentRegistry.unregister(activeConversationId.toString(), masterAgent))
+                                    agentRegistry.unregister(activeConversationId.toString(), agent))
                             .subscribe(event -> {
                                 if (terminal.get()) {
                                     return;
@@ -208,17 +231,17 @@ public class ChatAgentPipeline {
                                     // 仅在收到合法的最终 assistant 结果后落库并发送完成事件。
                                     append(userId, activeConversationId, MessageRole.ASSISTANT,
                                             resultText, modelName());
-                                    Map<String, Object> completePayload = new LinkedHashMap<>();
-                                    completePayload.put("conversationId", activeConversationId);
-                                    completePayload.put("intents", toIntentPayload(intentResult));
-                                    completePayload.put("isMultiIntent",
-                                            intentResult != null && intentResult.multiIntent());
-                                    // 完成事件回传意图识别阶段生成的问题改写；Map 可保留未改写时的 null 值。
-                                    completePayload.put("rewrittenQuestion",
-                                            intentResult == null ? null : intentResult.rewrittenQuestion());
-                                    completePayload.put("rewriteReason",
-                                            intentResult == null ? null : intentResult.rewriteReason());
-                                    sendEvent(emitter, SseEventEnum.COMPLETE, completePayload);
+//                                    Map<String, Object> completePayload = new LinkedHashMap<>();
+//                                    completePayload.put("conversationId", activeConversationId);
+//                                    completePayload.put("intents", toIntentPayload(intentResult));
+//                                    completePayload.put("isMultiIntent",
+//                                            intentResult != null && intentResult.multiIntent());
+//                                    // 完成事件回传意图识别阶段生成的问题改写；Map 可保留未改写时的 null 值。
+//                                    completePayload.put("rewrittenQuestion",
+//                                            intentResult == null ? null : intentResult.rewrittenQuestion());
+//                                    completePayload.put("rewriteReason",
+//                                            intentResult == null ? null : intentResult.rewriteReason());
+//                                    sendEvent(emitter, SseEventEnum.COMPLETE, completePayload);
                                     emitter.complete();
                                 }
                             }, throwable -> {
@@ -247,6 +270,21 @@ public class ChatAgentPipeline {
         }
 
         return emitter;
+    }
+
+    /**
+     * 用于判断用户问题是否命中快速路由等关键词
+     * @param question
+     * @return
+     */
+    public boolean isContinue(String question){
+        if (question == null || question.isBlank()) {
+            return false;
+        }
+
+        String lower = question.toLowerCase();
+        // 命中任意一个继续信号就返回true
+        return ALL.stream().anyMatch(lower::equals);
     }
 
     /**

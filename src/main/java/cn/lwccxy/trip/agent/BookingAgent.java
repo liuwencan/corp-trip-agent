@@ -71,6 +71,7 @@ public class BookingAgent {
     private final RedisCacheUtil redisCache;
     private final BookingPersistenceHook bookingPersistenceHook;
     private final AgentRegistryHook agentRegistryHook;
+    private final ActiveAgentPersistenceHook activeAgentPersistenceHook;
 
     /** 创建预订智能体配置并加载受控的预订流程提示词。 */
     public BookingAgent(Model model, AgentSkillRepository agentSkillRepository,
@@ -93,7 +94,8 @@ public class BookingAgent {
                         @Value("${corp.trip.bailian.dashscope-api}") String dashscopeApiKey,
                         @Value("${corp.trip.bailian.memory-library-id}") String memoryLibraryId,
                         RedisCacheUtil redisCache,
-                        AgentRegistryHook agentRegistryHook) {
+                        AgentRegistryHook agentRegistryHook,
+                        ActiveAgentPersistenceHook activeAgentPersistenceHook) {
         this.model = model;
         this.agentSkillRepository = agentSkillRepository;
         this.persistSessionHook = persistSessionHook;
@@ -117,6 +119,7 @@ public class BookingAgent {
         this.memoryLibraryId = memoryLibraryId;
         this.redisCache = redisCache;
         this.agentRegistryHook = agentRegistryHook;
+        this.activeAgentPersistenceHook = activeAgentPersistenceHook;
     }
 
     /** 为当前会话创建隔离的预订智能体并注入用户认证上下文。 */
@@ -167,7 +170,7 @@ public class BookingAgent {
                 .memory(new AutoContextMemory(AutoContextConfig.builder().build(), model))
                 .hooks(List.of(agentRegistryHook, persistSessionHook, bookingPersistenceHook, tuniuApiKeyShellHook,
                         progressNotificationHook, modelUsageBillingHook, agentExecutionMonitorHook,
-                        agentTracePersistenceHook, new AutoContextHook(), new PendingToolRecoveryHook()))
+                        agentTracePersistenceHook, new AutoContextHook(), new PendingToolRecoveryHook(), activeAgentPersistenceHook))
                 .build();
     }
 
