@@ -24,7 +24,8 @@ public enum SseEventEnum {
     COMPLETE("complete", "流式响应完成事件"),
     ERROR("error", "流式响应错误事件"),
     ASK("ask", "用户澄清请求事件"),
-    PLAN_UPDATE("plan_update", "Agent-Plan计划进度推送");
+    PLAN_UPDATE("plan_update", "Agent-Plan计划进度推送"),
+    RECOMMEND_QUESTIONS("recommend_questions", "推荐问题事件");
 
     private final String code;
     private final String description;
