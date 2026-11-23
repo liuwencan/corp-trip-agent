@@ -28,6 +28,10 @@ import java.util.List;
 public class DestinationLiveTools {
 
     private static final Logger logger = LoggerFactory.getLogger(DestinationLiveTools.class);
+    /**
+     * AgentScope框架对异常工具结果统一添加的前缀。
+     */
+    private static final String ERROR_PREFIX = "Tool execution failed";
     private static final String WEATHER_API_BASE = "https://wttr.in/";
     private static final int WEATHER_FORECAST_DAYS = 2;
     private static final String NEWS_PAGE_SIZE = "5";
@@ -79,6 +83,9 @@ public class DestinationLiveTools {
         }
 
         try {
+            // 模拟工具异常, 触发工具熔断
+//            int a = 1 / 0;
+
             // 获取 wttr.in 的结构化 JSON，再按目标日期提取当前天气或逐日预报。
             String encodedCity = URLEncoder.encode(normalizedCity, StandardCharsets.UTF_8);
             JSONObject raw = JSON.parseObject(sendGet(WEATHER_API_BASE + encodedCity + "?format=j1"));
@@ -126,7 +133,7 @@ public class DestinationLiveTools {
             logger.warn("[DestinationLiveTools] 天气查询失败，city={}", normalizedCity);
             result.put("available", false);
             result.put("error", "天气查询暂时不可用，请稍后重试");
-            return JSON.toJSONString(result);
+            return  ERROR_PREFIX + JSON.toJSONString(result);
         }
     }
 
@@ -135,6 +142,8 @@ public class DestinationLiveTools {
     public String queryDestinationNews(
             @ToolParam(name = "city", description = "目标城市，例如北京、上海、杭州、深圳") String city,
             @ToolParam(name = "topic", description = "关注主题：traffic、event、safety、flight、hotel、policy、general；可选", required = false) String topic) {
+
+
         String normalizedCity = city == null ? "" : city.trim();
         JSONObject result = new JSONObject();
         result.put("city", normalizedCity);
@@ -153,6 +162,8 @@ public class DestinationLiveTools {
         }
 
         try {
+            // 模拟工具异常, 触发工具熔断
+//            int a = 1 / 0;
             // 通过 NewsData.io 查询中文资讯，限制返回数量并保留来源和发布时间供行程建议引用。
             String query = normalizedCity + " " + topicKeyword(topic);
             String uri = "https://newsdata.io/api/1/news?apikey="
@@ -182,7 +193,7 @@ public class DestinationLiveTools {
             logger.warn("[DestinationLiveTools] 目的地资讯查询失败，city={}", normalizedCity);
             result.put("available", false);
             result.put("error", "目的地资讯查询暂时不可用，请稍后重试");
-            return JSON.toJSONString(result);
+            return ERROR_PREFIX + JSON.toJSONString(result);
         }
     }
 

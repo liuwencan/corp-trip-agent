@@ -6,6 +6,7 @@ import io.agentscope.core.hook.*;
 import io.agentscope.core.message.ContentBlock;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.ToolResultBlock;
+import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.tool.ToolGroup;
 import io.agentscope.core.tool.Toolkit;
 import org.slf4j.Logger;

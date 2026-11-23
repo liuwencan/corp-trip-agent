@@ -18,7 +18,7 @@ public class ToolCircuitBreakerStore {
     private final StringRedisTemplate redisTemplate;
 
     // 需要熔断的工具名单
-    private final static Set<String> NEED_CIRCUIT_BREAKERS_TOOL_NAME = Set.of("query_weather");
+    private final static Set<String> NEED_CIRCUIT_BREAKERS_TOOL_NAME = Set.of("query_weather", "query_destination_news");
     // ====== Redis前缀Key ========
     // 记录每个工具的异常失败次数
     private final static String FAIL_PREFIX = "tool:failcount:";
