@@ -6,6 +6,7 @@ import io.agentscope.core.hook.*;
 import io.agentscope.core.message.ContentBlock;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.ToolResultBlock;
+import io.agentscope.core.tool.ToolGroup;
 import io.agentscope.core.tool.Toolkit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +22,7 @@ public class ToolCircuitBreakerHook implements Hook {
 
     private final Logger logger = LoggerFactory.getLogger(ToolCircuitBreakerHook.class);
 
+    public static final String TOOL_CIRCUIT_BREAKER_GROUP = "tool_circuit_breaker_group";
     private final ToolCircuitBreakerStore toolCircuitBreakerStore;
 
     // 需要熔断的工具名单
@@ -67,11 +69,11 @@ public class ToolCircuitBreakerHook implements Hook {
 
             if(open && !cooldownExpired){
                 // 如果处于熔断状态 并且 还没有过冷却期, 该工具继续卸载, 对Agent不可见
-                toolkit.removeTool(toolName);
+                applyToolAvailability(toolkit, toolName, true);
             }else{
-                // TODO 其他情况, 把工具重新加载回给Agent
+                // 其他情况, 把工具重新加载回给Agent
                 // 1. 熔断状态, 但冷却时长已过
-                toolkit.registerTool(toolName);
+                applyToolAvailability(toolkit, toolName, false);
             }
         }
 
@@ -123,8 +125,7 @@ public class ToolCircuitBreakerHook implements Hook {
                 // 半开期 && 工具又执行错误了, 此时应该降级代数n继续++
                 long cooldown = toolCircuitBreakerStore.openWithNextGeneration(toolName);
                 // 继续卸载该工具
-                toolkit.removeTool(toolName);
-
+                applyToolAvailability(toolkit, toolName, true);
                 logger.info("[ToolCircuitBreakerHook] 工具熔断半开期再次失败 toolName={}, 重新熔断, 冷却={}s", toolName, cooldown);
             }else{
                 // =========== 工具执行错误 && 不处于半开期 ===========
@@ -135,7 +136,7 @@ public class ToolCircuitBreakerHook implements Hook {
                     // 2.1 该工具进入Open状态, 即达到熔断的条件（往Redis里面去新增一个对应的Key）
                     long cooldown = toolCircuitBreakerStore.openWithNextGeneration(toolName);
                     // 2.2 把工具从Agent上卸载下来, 在后续的推理轮次中该工具对Agent不可见
-                    toolkit.removeTool(toolName);
+                    applyToolAvailability(toolkit, toolName, true);
                     logger.info("[ToolCircuitBreakerHook] Tool 工具已熔断 toolName={}, 连续失败={}, 冷却={}s", toolName, count, cooldown);
                 }
             }
@@ -148,10 +149,48 @@ public class ToolCircuitBreakerHook implements Hook {
             }else if (toolCircuitBreakerStore.getFailureCount(toolName) > 0){
                 // 代表此前这个工具执行失败过, 当前执行成功了, 应该清除计数
                 toolCircuitBreakerStore.resetFailureCount(toolName);
+                logger.info("[ToolCircuitBreakerHook] Tool当前属于未熔断状态 已清除对应失败的计数 toolName={}, 清除前的失败次数为: {}", toolName, toolCircuitBreakerStore.getFailureCount(toolName));
             }
         }
 
         return Mono.just(postActingEvent);
+    }
+
+    /**
+     * 根据 {@code shouldUninstall} 在所有 active group 中将 tool 卸载或加回。
+     * 同一 tool 可能被多个 active group 注册（本框架下不常见但理论可能）。
+     */
+    private void applyToolAvailability(Toolkit toolkit, String toolName, boolean shouldUninstall) {
+        // 1. 获取熔断受控工具组
+        ToolGroup group = toolkit.getToolGroup(TOOL_CIRCUIT_BREAKER_GROUP);
+
+        if (group == null) {
+            return;
+        }
+        // 2. 判断组内是否有对应工具
+        boolean contains = group.containsTool(toolName);
+        if (shouldUninstall && contains) {
+            try {
+                group.removeTool(toolName);
+                logger.info("[ToolCircuitBreakerHook] 卸载 tool toolName={}, groupName={}", toolName, TOOL_CIRCUIT_BREAKER_GROUP);
+            } catch (Exception e) {
+                logger.error("[ToolCircuitBreakerHook] 卸载 tool 失败 toolName={}, groupName={}",
+                        toolName, TOOL_CIRCUIT_BREAKER_GROUP, e);
+            }
+        } else if (!shouldUninstall && !contains) {
+            try {
+                group.addTool(toolName);
+                logger.info("[ToolCircuitBreakerHook] 恢复 tool toolName={}, groupName={}", toolName, TOOL_CIRCUIT_BREAKER_GROUP);
+            } catch (Exception e) {
+                logger.error("[ToolCircuitBreakerHook] 恢复 tool 失败 toolName={}, groupName={}",
+                        toolName, TOOL_CIRCUIT_BREAKER_GROUP, e);
+            }
+        } else {
+            // 状态一致，不需要动作
+            logger.debug("[ToolCB] tool 状态已符合预期, toolName={}, groupName={}, " +
+                            "contains={}, shouldUninstall={}",
+                    toolName, TOOL_CIRCUIT_BREAKER_GROUP, contains, shouldUninstall);
+        }
     }
 
     /**

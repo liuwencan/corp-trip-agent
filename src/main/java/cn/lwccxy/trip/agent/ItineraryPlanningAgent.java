@@ -83,6 +83,8 @@ public class ItineraryPlanningAgent {
     private final UserProfileReadTools userProfileReadTools;
     private final UserProfileWriteTools userProfileWriteTools;
     private final ActiveAgentPersistenceHook activeAgentPersistenceHook;
+    private final ToolCircuitBreakerHook toolCircuitBreakerHook;
+    public static final String TOOL_CIRCUIT_BREAKER_GROUP = "tool_circuit_breaker_group";
 
     /**
      * 创建行程规划智能体配置。
@@ -117,7 +119,8 @@ public class ItineraryPlanningAgent {
                                   StringRedisTemplate redisTemplate,
                                   UserProfileReadTools userProfileReadTools,
                                   UserProfileWriteTools userProfileWriteTools,
-                                  ActiveAgentPersistenceHook activeAgentPersistenceHook) {
+                                  ActiveAgentPersistenceHook activeAgentPersistenceHook,
+                                  ToolCircuitBreakerHook toolCircuitBreakerHook) {
         this.model = model;
         this.persistSessionHook = persistSessionHook;
         this.persistPlanNoteHook = persistPlanNoteHook;
@@ -153,6 +156,7 @@ public class ItineraryPlanningAgent {
         this.userProfileReadTools = userProfileReadTools;
         this.userProfileWriteTools = userProfileWriteTools;
         this.activeAgentPersistenceHook = activeAgentPersistenceHook;
+        this.toolCircuitBreakerHook = toolCircuitBreakerHook;
     }
 
     /** 为当前业务会话创建隔离的行程规划智能体。 */
@@ -176,9 +180,13 @@ public class ItineraryPlanningAgent {
                 .currentRoundCompressionRatio(0.5) // 针对L6级压缩: 决定利用LLM摘要后的结果占没摘要前的原文的 x%, 配置越小的话, 压缩后损失的信息会越多
                 .build();
 
+
         Toolkit toolkit = new Toolkit();
+        // 创建工具分组
+        toolkit.createToolGroup(TOOL_CIRCUIT_BREAKER_GROUP, TOOL_CIRCUIT_BREAKER_GROUP, true);
+
         // 提供wttr.in短期天气和NewsData.io目的地资讯查询，补足规划所需的实时参考信息。
-        toolkit.registerTool(destinationLiveTools);
+        toolkit.registration().tool(destinationLiveTools).group(TOOL_CIRCUIT_BREAKER_GROUP).apply(); // 把资讯查询工具应用到分组里面
         toolkit.registerTool(providerApiKeyTools);
         toolkit.registerTool(tripOrderReadTools); // 出差行程单读取工具
         toolkit.registerTool(itineraryPlanDesignTools); // 行程方案设计入口
@@ -233,7 +241,7 @@ public class ItineraryPlanningAgent {
                         tuniuSearchResultCaptureHook, skillContentCollapseHook,
                         progressNotificationHook, modelUsageBillingHook, longTermMemoryRecordHook,
                         agentExecutionMonitorHook, agentTracePersistenceHook,
-                        new AutoContextHook(), new PendingToolRecoveryHook(), activeAgentPersistenceHook))
+                        new AutoContextHook(), new PendingToolRecoveryHook(), activeAgentPersistenceHook, toolCircuitBreakerHook))
                 .longTermMemory(longTermMemory)
                 .longTermMemoryMode(LongTermMemoryMode.AGENT_CONTROL) // AGENT_CONTROL模式：给Agent提供两个工具（检索/存储）由Agent决定何时调用工具进行存储长期记忆, 以及召回用户长期记忆
                 .build();

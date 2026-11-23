@@ -3,6 +3,7 @@ package cn.lwccxy.trip.agent.config;
 import cn.lwccxy.trip.agent.hooks.*;
 import cn.lwccxy.trip.agent.sse.SseEmitterRegistry;
 import cn.lwccxy.trip.agent.store.activeagent.ActiveAgentSessionStore;
+import cn.lwccxy.trip.agent.store.toolcircuitbreaker.ToolCircuitBreakerStore;
 import cn.lwccxy.trip.business.conversation.service.ConversationService;
 import io.agentscope.core.session.Session;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -78,15 +79,34 @@ public class CorpTripAgentHookConfig {
                                              ConversationService conversationService) {
         return new ConfirmationHook(sseEmitterRegistry, conversationService);
     }
-    
+
+    /**
+     * 进度通知Hook
+     * @param sseEmitterRegistry
+     * @return
+     */
     @Bean
     public ProgressNotificationHook progressNotificationHook(SseEmitterRegistry sseEmitterRegistry) {
         return new ProgressNotificationHook(sseEmitterRegistry);
     }
 
-
+    /**
+     * 活跃智能体持久化Hook
+     * @param activeAgentSessionStore
+     * @return
+     */
     @Bean
     public ActiveAgentPersistenceHook activeAgentPersistenceHook(ActiveAgentSessionStore activeAgentSessionStore) {
         return new ActiveAgentPersistenceHook(activeAgentSessionStore);
+    }
+
+    /**
+     * 工具熔断恢复Hook
+     * @param toolCircuitBreakerStore
+     * @return
+     */
+    @Bean
+    public ToolCircuitBreakerHook toolCircuitBreakerHook(ToolCircuitBreakerStore toolCircuitBreakerStore) {
+        return new ToolCircuitBreakerHook(toolCircuitBreakerStore);
     }
 }

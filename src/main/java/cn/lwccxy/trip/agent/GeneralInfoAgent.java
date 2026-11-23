@@ -57,7 +57,8 @@ public class GeneralInfoAgent {
     private final DestinationLiveTools destinationLiveTools;
     private final PolicyTools policyTools;
     private final ActiveAgentPersistenceHook activeAgentPersistenceHook;
-
+    private final ToolCircuitBreakerHook toolCircuitBreakerHook;
+    public static final String TOOL_CIRCUIT_BREAKER_GROUP = "tool_circuit_breaker_group";
 
 
     /**
@@ -77,7 +78,8 @@ public class GeneralInfoAgent {
                             ModelUsageBillingHook modelUsageBillingHook,
                             AgentExecutionMonitorHook agentExecutionMonitorHook,
                             AgentTracePersistenceHook agentTracePersistenceHook,
-                            AgentRegistryHook agentRegistryHook, ActiveAgentPersistenceHook activeAgentPersistenceHook) {
+                            AgentRegistryHook agentRegistryHook, ActiveAgentPersistenceHook activeAgentPersistenceHook,
+                            ToolCircuitBreakerHook toolCircuitBreakerHook) {
         this.dataSource = dataSource;
         this.model = model;
         this.weatherMcpClient = weatherMcpClient;
@@ -97,6 +99,7 @@ public class GeneralInfoAgent {
         this.destinationLiveTools = destinationLiveTools;
         this.policyTools = policyTools;
         this.activeAgentPersistenceHook = activeAgentPersistenceHook;
+        this.toolCircuitBreakerHook = toolCircuitBreakerHook;
     }
 
 
@@ -114,8 +117,12 @@ public class GeneralInfoAgent {
 
         // 子智能体按工具调用所需任务独立响应，主智能体负责选择和组合它们的结果。
         Toolkit toolkit = new Toolkit();
+
+        // 创建工具分组
+        toolkit.createToolGroup(TOOL_CIRCUIT_BREAKER_GROUP, TOOL_CIRCUIT_BREAKER_GROUP, true);
+
         // 通用信息查询与行程规划共享同一套目的地天气和最新资讯工具。
-        toolkit.registerTool(destinationLiveTools);
+        toolkit.registration().tool(destinationLiveTools).group(TOOL_CIRCUIT_BREAKER_GROUP).apply();
         toolkit.registerTool(policyTools);
 
         // 只将配置明确允许的天气 MCP 工具注册到 Agent；空配置时跳过注册，避免空名单退化为全量开放。
@@ -148,7 +155,8 @@ public class GeneralInfoAgent {
                 .ragMode(RAGMode.AGENTIC)
                 .memory(new AutoContextMemory(autoContextConfig, model))
                 .hooks(List.of(agentRegistryHook, persistSessionHook, agentExecutionMonitorHook, agentTracePersistenceHook,
-                        progressNotificationHook, modelUsageBillingHook, new PendingToolRecoveryHook(), activeAgentPersistenceHook))
+                        progressNotificationHook, modelUsageBillingHook, new PendingToolRecoveryHook(), activeAgentPersistenceHook,
+                        toolCircuitBreakerHook))
                 .build();
     }
 }
