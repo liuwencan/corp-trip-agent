@@ -14,6 +14,7 @@ import io.agentscope.core.rag.Knowledge;
 import io.agentscope.core.rag.RAGMode;
 import io.agentscope.core.tool.ToolExecutionContext;
 import io.agentscope.core.tool.Toolkit;
+import io.agentscope.core.tool.ToolkitConfig;
 import io.agentscope.core.tool.mcp.McpClientBuilder;
 import io.agentscope.core.tool.mcp.McpClientWrapper;
 import io.agentscope.core.tool.subagent.SubAgentConfig;
@@ -116,7 +117,9 @@ public class GeneralInfoAgent {
                 .build();
 
         // 子智能体按工具调用所需任务独立响应，主智能体负责选择和组合它们的结果。
-        Toolkit toolkit = new Toolkit();
+        Toolkit toolkit = new Toolkit(ToolkitConfig.builder()
+                .parallel(true) // 开启工具并行（用户可能既要求查天气和查咨询和查政策, 这类工具并没有前后依赖关系, 所以可以把工具并行打开）
+                .build());
 
         // 创建工具分组
         toolkit.createToolGroup(TOOL_CIRCUIT_BREAKER_GROUP, TOOL_CIRCUIT_BREAKER_GROUP, true);
