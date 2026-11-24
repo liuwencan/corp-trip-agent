@@ -213,7 +213,7 @@ public class IntentRecognizer {
 
 
     /**
-     * 按 L0 -> L1 -> L2 顺序识别；未命中时改写一次问题并重跑 L1 -> L2，最后由 L3 大模型兜底。
+     * 按 L0 -> L1 -> L2 顺序识别；L1 已确定多意图时直接交由 L3，未确定时改写一次后再由 L3 兜底。
      *
      * @param question 用户原始问题
      * @return 按实际命中层级返回对应的强类型识别结果
@@ -256,9 +256,13 @@ public class IntentRecognizer {
                 "问题结构分析完成，开始识别业务意图", null, RecognitionLevel.L0);
 
         // ============= L1 -> L2层意图识别编排 ==================
-        // 原问题的 L1/L2 未形成单一结果时，只执行一次改写，避免重复模型调用。
+        // 原问题未形成单一结果时，仅对仍需消歧的请求执行一次改写；L1 多意图结果会直接交给 L3。
         IntentRecognitionResult firstPass = recognizeL1ThenL2(question, "原问题", "original", progressListener);
         if (firstPass != null) {
+            // L1 已逐句确定多个业务意图时，向量层无法保留多意图结构，应交给 L3 统一复核和拆分。
+            if (firstPass.level() == RecognitionLevel.L1 && firstPass.multiIntent()) {
+                return recognizeL3WithProgress(question, "规则识别出多个意图，正在进行模型复核", progressListener);
+            }
             return firstPass;
         }
 
@@ -279,6 +283,13 @@ public class IntentRecognizer {
             IntentRecognitionResult rewrittenPass = recognizeL1ThenL2(
                     rewrittenQuestion, "改写问题", "rewritten", progressListener);
             if (rewrittenPass != null) {
+                // 改写后的 L1 若命中多个意图，同样交由 L3 按用户原始表达复核，避免改写误判直接成为最终结果。
+                if (rewrittenPass.level() == RecognitionLevel.L1 && rewrittenPass.multiIntent()) {
+                    IntentRecognitionResult l3Result = recognizeL3WithProgress(
+                            question, "改写问题规则识别出多个意图，正在进行模型复核", progressListener);
+                    return new RecognitionResultWithRewrite(
+                            l3Result, rewrittenQuestion, rewriteResult.reason());
+                }
                 // 改写后的问题参与本轮识别时，将其附加到结果供聊天接口回传。
                 return new RecognitionResultWithRewrite(
                         rewrittenPass, rewrittenQuestion, rewriteResult.reason());
@@ -289,14 +300,30 @@ public class IntentRecognizer {
 
         // =================== L3层大模型识别兜底 =========================
         // 原问题和改写问题均未形成确定结果时才调用 L3，保留用户原始语义作为最终判断依据。
-        publishProgress(progressListener, "llm_fallback", "started", "规则和语义检索未能唯一确定，正在进行模型识别",
-                null, null);
-        IntentRecognitionResult l3Result = recognizeL3(question);
-        publishProgress(progressListener, "llm_fallback", "completed", "模型识别完成",
-                null, RecognitionLevel.L3);
+        IntentRecognitionResult l3Result = recognizeL3WithProgress(
+                question, "规则和语义检索未能唯一确定，正在进行模型识别", progressListener);
         return rewriteResult != null
                 ? new RecognitionResultWithRewrite(l3Result, rewrittenQuestion, rewriteResult.reason())
                 : l3Result;
+    }
+
+    /**
+     * 执行 L3 意图识别并发送统一的进度事件。
+     *
+     * @param question 交给大模型识别的问题
+     * @param startMessage L3 开始时展示的原因说明
+     * @param progressListener 意图识别进度监听器
+     * @return L3 模型识别结果
+     */
+    private RecognitionResultL3 recognizeL3WithProgress(String question, String startMessage,
+                                                         Consumer<IntentRecognitionProgress> progressListener) {
+        // 用调用方提供的原因说明区分常规兜底和 L1 多意图复核。
+        publishProgress(progressListener, "llm_fallback", "started", startMessage, null, null);
+        RecognitionResultL3 l3Result = recognizeL3(question);
+        // 无论模型返回具体意图还是 UNKNOWN，都结束本次 L3 进度阶段。
+        publishProgress(progressListener, "llm_fallback", "completed", "模型识别完成",
+                null, RecognitionLevel.L3);
+        return l3Result;
     }
 
     /**
