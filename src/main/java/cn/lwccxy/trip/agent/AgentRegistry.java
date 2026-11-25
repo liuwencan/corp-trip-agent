@@ -1,6 +1,6 @@
 package cn.lwccxy.trip.agent;
 
-import cn.lwccxy.trip.agent.session.CorpTripSessionKey;
+import cn.lwccxy.trip.agent.store.CorpTripSessionKey;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.agent.Agent;
 import io.agentscope.core.plan.PlanNotebook;

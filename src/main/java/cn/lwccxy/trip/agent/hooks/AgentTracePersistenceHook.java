@@ -206,6 +206,7 @@ public class AgentTracePersistenceHook implements Hook {
         pending.span = newSpan(execution, "TOOL", toolUse.getName(), null);
         pending.span.setToolName(toolUse.getName());
         pending.span.setToolCallId(toolUse.getId());
+        pending.span.setToolInput(toJson(toolUse.getInput()));
         insert(pending.span);
         execution.pendingTools.put(toolUse.getId(), pending);
         pendingAgentTools.computeIfAbsent(agentToolKey(execution.traceId, toolUse.getName()), key ->
@@ -419,6 +420,11 @@ public class AgentTracePersistenceHook implements Hook {
             result.add(item);
         }
         return result.toJSONString();
+    }
+
+    /** 将工具入参映射序列化为 JSON，保留每次模型实际发起调用时的参数快照。 */
+    private String toJson(Map<String, Object> input) {
+        return input == null ? null : JSON.toJSONString(input);
     }
 
     /** 将单条 AgentScope 消息序列化为可持久化的 JSON 对象。 */

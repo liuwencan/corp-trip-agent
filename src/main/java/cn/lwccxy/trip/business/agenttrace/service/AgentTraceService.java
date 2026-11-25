@@ -187,6 +187,9 @@ public class AgentTraceService {
         if (!isValidJson(form.getToolResult())) {
             return "toolResult";
         }
+        if (!isValidJson(form.getToolInput())) {
+            return "toolInput";
+        }
         if (!isValidJson(form.getAttributes())) {
             return "attributes";
         }
@@ -211,6 +214,7 @@ public class AgentTraceService {
         entity.setModelName(normalize(form.getModelName()));
         entity.setToolName(normalize(form.getToolName()));
         entity.setToolCallId(normalize(form.getToolCallId()));
+        entity.setToolInput(normalize(form.getToolInput()));
         entity.setErrorSummary(normalize(form.getErrorSummary()));
         entity.setInputMessages(normalize(form.getInputMessages()));
         entity.setOutputMessage(normalize(form.getOutputMessage()));

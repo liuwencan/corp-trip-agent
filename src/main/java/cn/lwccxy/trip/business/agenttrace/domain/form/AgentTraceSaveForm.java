@@ -64,6 +64,9 @@ public class AgentTraceSaveForm {
     /** 工具调用 ID。 */
     @Size(max = 128)
     private String toolCallId;
+    /** 本次工具调用的实际入参 JSON。 */
+    @Size(max = 1000000)
+    private String toolInput;
     /** 输入消息数。 */
     @PositiveOrZero
     private Integer inputMessageCount;

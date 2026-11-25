@@ -23,6 +23,7 @@ public class AgentTraceVO {
     private String modelName;
     private String toolName;
     private String toolCallId;
+    private String toolInput;
     private Integer inputMessageCount;
     private Long inputChars;
     private Long outputChars;

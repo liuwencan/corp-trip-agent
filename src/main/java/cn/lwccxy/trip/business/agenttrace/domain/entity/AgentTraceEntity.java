@@ -43,6 +43,8 @@ public class AgentTraceEntity {
     private String toolName;
     /** 工具调用 ID。 */
     private String toolCallId;
+    /** 本次工具调用的实际入参 JSON。 */
+    private String toolInput;
     /** 输入消息数。 */
     private Integer inputMessageCount;
     /** 输入字符数。 */
